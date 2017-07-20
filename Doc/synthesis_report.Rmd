@@ -1,0 +1,195 @@
+---
+bibliography: bib/ast_bib.bib
+csl: csl/ices-journal-of-marine-science.csl
+header-includes: \usepackage{longtable} \usepackage{graphicx} \usepackage{isomath}
+  \usepackage{upgreek} \usepackage{caption} \usepackage{textcomp}
+output:
+  word_document:
+    reference_docx: template/report_template_Rmarkdown.docx
+  pdf_document:
+    fig_caption: no
+  html_document: default
+---  
+
+```{r LoadLibraries, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+rm(list=ls())
+# List packages required to run the script
+pkgs <- c("tidyverse","pander","swfscMisc","sp","lubridate","readr",
+          "knitr","rgdal","ggmap","maps","readxl","maptools","png",
+          "cowplot","RSQLite", "stringr","gdata","reshape2",
+          "xtable","devtools","scatterpie","plotKML","akima","RODBC")
+# Install and load all CRAN packages provided from a character vector
+load_pkgs = function(pkgs){
+  new_pkgs = pkgs[!(pkgs %in% installed.packages()[ ,'Package'])]
+  if(length(new_pkgs) > 0) install.packages(new_pkgs)
+  invisible(lapply(pkgs,function(x)
+    suppressPackageStartupMessages(library(x,character.only=TRUE))))
+}
+# Load packages
+load_pkgs(pkgs)
+# List github packages required to run the script
+dev_pkgs <- c("surveyR")
+dev_repo <- "kstierhoff"
+# Install and load all github packages provided from a character vector
+load_dev_pkgs = function(repo,pkgs){
+  new_pkgs = pkgs[!(pkgs %in% installed.packages()[ ,'Package'])]
+  new_pkgs_path = paste(dev_repo,dev_pkgs,sep="/")
+  if(length(new_pkgs) > 0) install_github(new_pkgs)
+  invisible(lapply(pkgs,function(x)
+    suppressPackageStartupMessages(library(x,character.only=TRUE))))
+}
+# Load github packages
+load_dev_pkgs(dev_repo,dev_pkgs)
+# set system time zone to GMT
+Sys.setenv(tz = "GMT")
+# determines method of table generation (whether kable or xtable) for best formatting
+doc.type <-knitr::opts_knit$get('rmarkdown.pandoc.to')
+# global knitr chunk options
+knitr::opts_chunk$set(echo=FALSE,warning=FALSE, message=FALSE,fig.align='center',dev="png",
+                      dev.args=list(type="cairo"),dpi=150)
+# global pander options
+panderOptions('table.style','rmarkdown'); panderOptions('table.split.table', Inf); 
+panderOptions('digits', 6); panderOptions('round', 6); panderOptions('keep.trailing.zeros', TRUE); 
+panderOptions('missing', "")
+# processing instructions (TRUE/FALSE)
+get.db        <- TRUE # Download data from SQL database
+copy.files    <- TRUE  # Copy data files from data to local directory
+redraw.figs   <- TRUE # Draw plots and maps, or use existing
+```
+
+
+**Comparative estimates of groundfish biomass, abundance, and diversity using various optical sampling methods**
+
+Kevin L. Stierhoff^1^, Mary M. Yoklavich^2^, and M. Elizabeth Clarke^3^
+
+Draft date: `r format(Sys.time(), "%d %B %Y")`'
+
+^1^Fisheries Resources Division  
+Southwest Fisheries Science Center  
+NOAA-National Marine Fisheries Service  
+8901 La Jolla Shores Drive  
+La Jolla, CA 92037, USA  
+
+^2^Fisheries Ecology Division  
+Southwest Fisheries Science Center  
+NOAA-National Marine Fisheries Service  
+110 McAllister Way  
+Santa Cruz, CA 95060, USA
+
+^3^Office of the Science Director 
+Northwest Fisheries Science Center  
+NOAA-National Marine Fisheries Service  
+2725 Montlake Boulevard East 
+Seattle, WA 98112, USA  
+
+\newpage
+
+# Abstract  
+
+TBD
+
+\newpage  
+
+# Introduction  
+
+Surveys of west coast groundfishes are needed in high-relief rocky areas that are inaccessible to traditional net-based mobile fishing gear (e.g., bottom trawls). Several species, such as cowcod (_Sebastes levis_) and yelloweye (_S. ruberrimus_) rockfish, are strongly associated with these rocky habitats, have populations at various levels of depletion, and occupy habitats that have incurred substantial impacts (Love and Yoklavich 2006; Yoklavich et al. 2007). Now that much of the continental shelf and upper slope are closed to groundfishing, it is important to develop effective monitoring strategies for fish species living in these untrawlable habitats.  
+
+Non-lethal survey methods, whether optical, acoustical, or some combination of both, are needed to adequately assess these vulnerable species while minimizing impact on the fishes and their habitat. To that end, we estimated the abundance, biomass, and diversity of groundfishes in complex rocky areas using a human-occupied submersible (SUB), an autonomous underwater vehicle (AUV), and a remotely operated vehicle (ROV).
+
+The specific objectives of this project using visual survey techniques from the SUB, AUV, and ROV were to (1) collect data on counts and sizes for several rockfishes (_Sebastes_ spp.; both common and rare, large- and small-bodied, and semi-pelagic and highly demersal) and other taxa of interest including lingcod (_Ophiodon elongatus_), thornyheads (_Sebastolobus_ sp.), and Pacific hake (_Merluccius productus_); (2) estimate densities (and associated precision) for these taxa; (3) estimate size composition for these species; (4) estimate abundance and biomass (and precision) for these taxa; and (5) estimate diversity of fish species within the study site. An additional objective was to couple the relative species and size compositions of fishes from the SUB? ROV? survey with fish densities estimated from an acoustics survey simultaneously conducted in the study area.  
+
+# Methods  
+## Survey area  
+Underwater surveys of demersal fishes and habitats were conducted on two rocky seamounts (Footprint Bank and Piggy Bank) off southern California (**Figure 1**). The study site is located inside the State and Federal Footprint Marine Reserves, offshore of Santa Cruz Island, inside the Channel Islands National Marine Sanctuary. The Piggy Bank is about 30 km^2^ in area, ranging in depth from 275 to 900 m; the Footprint Bank is about 10 km^2^ in area, ranging in depth from 80 to 500 m. High-resolution bathymetry and broad-scale seabed classification from multibeam echosounder backscatter data were available prior to our surveys (Dartnell et al. 2005). The survey area was stratified into 100-m depth strata down to 400 m depth. The total area of each stratum was estimated using ArcMap (version 9.3) and used to estimate total biomass and abundance from estimates of fish density.  
+
+## Survey design  
+Visual surveys were conducted using a human-occupied submersible (SUB **[or HOV?]**; _Dual Deepworker_, Nuytco) deployed from the F/V _Velero IV_ between 21 and 30 September 2011; using a remotely operated vehicle (ROV, _Phantom DS4_, Deep Ocean Exploration and Research) deployed from the F/V _Outer Limits_ during four legs between 21 September and 8 December 2011 (Leg 1: 21-22 September; Leg 2: 4 October; Leg 3: 12-13 October; and Leg 4: 4-8 December; and using an autonomous underwater vehicle (AUV, _Lucille_, SeaBED) between **21 and 30 September 2011** aboard the NOAA Vessel _Shearwater_.  
+
+For the AUV survey, a 250 x 250 m grid was superimposed on the survey area, then each cell was assigned to one of three focal areas: the top of Piggy Bank, the top of Footprint Bank and the deeper flank around Footprint Bank (**Figure 2**). Cells to be sampled were then selected randomly from each area. Within each cell, the AUV was programmed to survey pattern that covered the majority of the cell at a nominal height of **X m** above the seabed. The survey pattern consisted of five 200-m long transects connected by four 25-m long lines for a total transect distance of 1.1 km in each cell sampled. If randomly selected cells were close in proximiry, multiple cells could be sampled during one deployment. One to four cells were sampled per day and deployment duration varied from 45 to 88 min (mean = 74 min). Digital still images were collected every 10 s throughout each transect (see Survey Vehicles below).  
+
+## Survey vehicles  
+All visual transect surveys were conducted during daylight hours (~06:30 to 17:00 h PST) and spanned a variety of seabed types, from flat-sandy and mud seabeds to steeply sloping, high-relief rocky seabeds.  
+
+### Remotely operated vehicle  
+The location of the ROV above the seabed was estimated using an ultra-short baseline (USBL) acoustic tracking system (TrackLink 5000HA, LinkQuest, Inc.) and differential global positioning system (dGPS, CSI Wireless dGPS MAX). The length of each transect was estimated from the ROV speed that was measured using a Doppler velocity log (DVL, Workhorse Navigator, Teledyne RD Instruments). Water-column and near-bottom water quality parameters [e.g., temperature, salinity, dissolved oxygen (DO) concentration and DO saturation (%)] were measured during each transect using a CTD (Citadel CTD-ES, Teledyne RD Instruments) and optode (Model 3930, Aanderaa, Inc.). All data were time-stamped and logged synchronously using WinFrog integrated navigation software (Fugro Pelagos, Inc.). Reference lasers (spaced 20 and 60 cm-apart) were used to estimate fish lengths and transect widths (see Effort analysis below). All video footage was recorded to digital-video tape (DVCAM) and later used for enumerating fishes and characterizing the seabed. To aid in the identification and measurement of fishes observed on the video tapes, and also for better characterizing seabed substrates, high-quality digital still images were collected haphazardly. 
+
+The location of transects during Leg 1 (**Figure X**, orange transects) were selected based on preliminary acoustic backscatter data collected by the SWFSC’s Advanced Survey Technology (AST) group between 13 and 14 September. Subsequent transects were selected at random (Legs 2-4, **Figure X**). 
+
+### Human-occupied submersible  
+
+### Autonomous underwater vehicle  
+Stereo images of the seabed were collected every 10 s using a **calibrated?**, downward-facing stereo camera pair (5-megapixel, 12-bit dynamic range machine vision cameras; GigE, Prosilica) synced to a strobe (**[model important?]**); a third GigE camera was angled forward at and angle of 30^$\circ$^strobe synced with the cameras. The location of the AUV above the seabed was estimated using a USBL acoustic tracking system (TrackLink **1500/5000HA**, LinkQuest, Inc.) and dGPS (**Model, Manufacturer??**), and the depth was determined using a depth sensor (**Model?**, Paroscientific). Scientists communicated with the AUV using an acoustic modem (256008 acoustic micromodem, WHOI) at depth and a radio modem (Model FGR-115 RCRF, FreeWave) at the surface. Physical oceanographic measurements were made using an onboard CTD (Model 49 FastCat, Sea-Bird).
+
+## Characterization of seabed type
+**[Not sure if we'll keep this section, but I've inserted text here in case.]**
+### AUV
+Seafloor habitats in each photograph were categorized using a two-character code (Table 1) The first character signified the primary habitat type that covered greater than 50% of the field of view, while the second character defined the secondary habitat type covering between 20% and 50%.  If the primary habitat coverage exceeded 80%, that letter was denoted twice (e.g., CC).
+
+## Estimation of abundance and biomass
+### ROV
+
+### SUB  
+
+### AUV  
+Digital still images were downloaded at the end of each mission and color-corrected. All non-overlapping images from the port, downward-facing camera were reviewed to identify and count all fish observed; images from the angled camera were used to aid in the identification of fishes observed. The area of each image was estimated using the measured altitude above the seabed and the specified camera field of view.  
+
+ 
+
+# Results  
+## Survey effort
+### ROV
+
+### SUB  
+
+### AUV
+Overall, twenty-seven **cells?** were sampled throughout the three strata during the 10 d survey (**Figure 1**).  
+
+## Abundance estimates
+## Biomass estiamtes
+
+# Discussion  
+## Survey effort  
+## Abundance and biomass estimates
+
+
+# Tables  
+
+\newpage  
+
+# Figures  
+
+```{r SurveyDomain,fig.height=6.5,fig.width=3.5,eval=FALSE}
+# insert image if Word or HTML output
+if(doc.type == "docx" | doc.type == "html"){
+# read image file and print result
+img <- readPNG("../Figs/fig_temp.png")
+grid.raster(img)
+}
+```  
+
+\begin{center}
+\includegraphics[width = 5 in]{../Figs/fig_temp.png}
+\end{center}
+
+**Figure 1.** Temporary figure.  
+
+\newpage
+
+```{r AUVSamplingDesign,fig.height=6.5,fig.width=3.5,eval=FALSE}
+# insert image if Word or HTML output
+if(doc.type == "docx" | doc.type == "html"){
+# read image file and print result
+img <- readPNG("../Figs/fig_AUV_survey_design.png")
+grid.raster(img)
+}
+```  
+
+\begin{center}
+\includegraphics[width = 5 in]{../Figs/fig_AUV_survey_design.png}
+\end{center}
+
+**Figure 2.** Sampling design for AUV survey.  
+
+\newpage
+
+# Literature cited
