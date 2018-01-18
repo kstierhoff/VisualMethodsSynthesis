@@ -12,18 +12,16 @@ output:
 ---  
 
 ```{r LoadLibraries, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
-rm(list=ls())
 # List packages required to run the script
-pkgs <- c("tidyverse","pander","swfscMisc","sp","lubridate","readr",
-          "knitr","rgdal","ggmap","maps","readxl","maptools","png",
-          "cowplot","RSQLite", "stringr","gdata","reshape2",
-          "xtable","devtools","scatterpie","plotKML","akima","RODBC")
+pkgs <- c("tidyverse","knitr","swfscMisc","lubridate","here",
+          "maps","readxl","maptools","png","mapdata","sf","flextable",
+          "cowplot","devtools","kableExtra","RODBC","pander","DBI","odbc")
 # Install and load all CRAN packages provided from a character vector
 load_pkgs = function(pkgs){
   new_pkgs = pkgs[!(pkgs %in% installed.packages()[ ,'Package'])]
-  if(length(new_pkgs) > 0) install.packages(new_pkgs)
+  if (length(new_pkgs) > 0) install.packages(new_pkgs)
   invisible(lapply(pkgs,function(x)
-    suppressPackageStartupMessages(library(x,character.only=TRUE))))
+    suppressPackageStartupMessages(library(x,character.only = TRUE))))
 }
 # Load packages
 load_pkgs(pkgs)
@@ -33,32 +31,182 @@ dev_repo <- "kstierhoff"
 # Install and load all github packages provided from a character vector
 load_dev_pkgs = function(repo,pkgs){
   new_pkgs = pkgs[!(pkgs %in% installed.packages()[ ,'Package'])]
-  new_pkgs_path = paste(dev_repo,dev_pkgs,sep="/")
-  if(length(new_pkgs) > 0) install_github(new_pkgs)
+  new_pkgs_path = paste(dev_repo,dev_pkgs,sep = "/")
+  if (length(new_pkgs) > 0) install_github(new_pkgs)
   invisible(lapply(pkgs,function(x)
-    suppressPackageStartupMessages(library(x,character.only=TRUE))))
+    suppressPackageStartupMessages(library(x,character.only = TRUE))))
 }
 # Load github packages
 load_dev_pkgs(dev_repo,dev_pkgs)
 # set system time zone to GMT
 Sys.setenv(tz = "GMT")
-# determines method of table generation (whether kable or xtable) for best formatting
-doc.type <-knitr::opts_knit$get('rmarkdown.pandoc.to')
+
+# determines method of table generation (whether kable or pander) for best formatting
+doc.type <- knitr::opts_knit$get('rmarkdown.pandoc.to')
+if (is.null(doc.type)) {doc.type <- "html"}
+
 # global knitr chunk options
-knitr::opts_chunk$set(echo=FALSE,warning=FALSE, message=FALSE,fig.align='center',dev="png",
-                      dev.args=list(type="cairo"),dpi=150)
+knitr::opts_chunk$set(echo = F, warning = F, message = F, dev = "png", 
+                      dev.args = list(type = "cairo"), dpi = 150)  
+
+# determine global knitr table format
+if (doc.type == "latex") {
+  knitr.format <- "latex"
+} else {
+  knitr.format <- "html" 
+}
+
 # global pander options
-panderOptions('table.style','rmarkdown'); panderOptions('table.split.table', Inf); 
-panderOptions('digits', 6); panderOptions('round', 6); panderOptions('keep.trailing.zeros', TRUE); 
+panderOptions('table.style','rmarkdown'); panderOptions('table.split.table', Inf);
+panderOptions('digits', 6); panderOptions('round', 6); panderOptions('keep.trailing.zeros', TRUE);
 panderOptions('missing', "")
+
 # processing instructions (TRUE/FALSE)
-get.db        <- TRUE # Download data from SQL database
-copy.files    <- TRUE  # Copy data files from data to local directory
-redraw.figs   <- TRUE # Draw plots and maps, or use existing
+import.data   <- T # Download data from SQL database
+copy.files    <- T # Copy data files from data to local directory
+redraw.figs   <- T # Draw plots and maps, or use existing
+```  
+
+```{r ImportROV}
+if (import.data) {
+  channel = odbcConnect(dsn = 'ROV2')
+  rov.nav              <- sqlQuery(channel,"
+            SELECT dbo.tbl_NAV_DATA.*, dbo.tbl_DIVE_LOG.survey_number, dbo.tbl_DIVE_LOG.site_general
+            FROM dbo.tbl_DIVE_LOG INNER JOIN dbo.tbl_NAV_DATA ON dbo.tbl_DIVE_LOG.dive_name = dbo.tbl_NAV_DATA.dive_name
+            WHERE (((dbo.tbl_DIVE_LOG.survey_number)=40));")
+  rov.logs             <- sqlFetch(channel, "dbo.tbl_DIVE_LOG")
+  rov.events           <- sqlFetch(channel, "dbo.tbl_DIVE_EVENTS") 
+  rov.video_obs        <- sqlFetch(channel, "dbo.tbl_VIDEO_OBS")
+  rov.photo_info       <- sqlFetch(channel, "dbo.tbl_PHOTO_INFO")
+  rov.photo_obs        <- sqlFetch(channel, "dbo.tbl_PHOTO_OBS")
+  rov.lengths          <- sqlFetch(channel, "dbo.tbl_FISH_LENGTHS")
+  spp_codes            <- sqlFetch(channel, "dbo.tlu_SPECIES_CODES")
+  size_codes           <- sqlFetch(channel, "dbo.tlu_SIZE_CODES")
+  lw_data              <- sqlFetch(channel, "dbo.tlu_LENGTH_WEIGHT_DATA")
+  la_data              <- sqlFetch(channel, "dbo.tlu_LENGTH_AGE_DATA")
+  close(channel)
+  
+  save(rov.nav,rov.logs,rov.events,rov.video_obs,rov.photo_info,
+       rov.photo_obs,rov.lengths,spp_codes,lw_data,la_data,size_codes,
+       file = here("Data/rov_data.Rdata"))
+} else {
+  load(here("Data/rov_data.Rdata"))
+}
+
+# Remove unused logs
+rov.logs       <- filter(rov.logs,survey_number == 40 & for_analysis == 1)
+
+# Read good nav IDs
+good.rov.nav <- read_csv(here("Data/good_rov_nav.csv"))$nav_id
+
+# Filter, rename nav
+rov.nav        <- filter(rov.nav,dive_name %in% rov.logs$dive_name) %>%
+  rename(long     = lon_dd_r,
+         lat      = lat_dd_r,
+         depth    = depth_r,
+         disp     = disp_r,
+         cum_disp = cum_disp_r) %>% 
+  filter(nav_id %in% good.rov.nav) %>%
+  mutate(depth = depth - altitude, # Calculate seabed depth from pressure and altitude
+         stratum = cut(depth,seq(-400,0,100))) %>% 
+  select(-camera_altitude,-slant_range,-center_width,-area_r,-cum_area_r) %>% 
+  arrange(date_time)
+
+# Calculate area estimates
+cw.data <- calc_width(rov.nav$pitch,rov.nav$altitude,ROV = "Phantom")
+
+# Merge data
+rov.nav <- bind_cols(rov.nav,cw.data) %>% 
+  filter(pitch < 0 & slant_range <= 6) %>% 
+  mutate(area = center_width * disp)
+
+# Summmarise distance by dive and depth stratum
+rov.nav.summ.stratum <- rov.nav %>% 
+  group_by(dive_name,stratum) %>% 
+  summarise(
+    n = n(),
+    distance = sum(disp),
+    mean.z = mean(depth)) %>% 
+  arrange(desc(distance))
+
+# ggplot(rov.nav,aes(long,lat,group = dive_name,colour = stratum)) + geom_path() + coord_map() + theme_bw()
+
+# Filter other data
+rov.events <- filter(rov.events,dive_name %in% rov.logs$dive_name)
+
+# Add lat/long/depth and species information to observations
+rov.video_obs <- filter(rov.video_obs,dive_name %in% rov.logs$dive_name) %>% 
+  left_join(select(rov.nav,nav_id,lat,long,depth)) %>% 
+  left_join(select(spp_codes,species_code,sci_name,sci_name_full,common_name,species_group)) %>% 
+  left_join(select(size_codes,size_code,desc_coast11)) %>% 
+  rename(sciName = sci_name_full,
+         size_class = desc_coast11) %>%
+  mutate(geol_ps = paste(geol_prim,geol_sec,sep = "")) %>% 
+  droplevels()
+
+
+# Format L/W data table
+lw_data <- filter(lw_data,to_use == 1) %>%
+  select(-id,-to_use) %>% 
+  rename(sciName = sci_name_full,
+         Reference = reference) %>% 
+  arrange(sciName) %>% 
+  filter(!is.na(a))
+
+# Format L/age data table
+la_data <- filter(la_data,to_use == 1) %>% 
+  select(-id,-to_use) %>% 
+  rename(sciName = sci_name_full,
+         Reference = reference) %>% 
+  arrange(sciName) %>% 
+  filter(!is.na(L_inf))
+
+# Extract only fish observations
+rov.fish <- rov.video_obs %>% 
+  filter(str_detect(sciName,"Sebastes|Sebastolobus|Ophiodon|Merluccius")) %>% 
+  left_join(select(lw_data,sciName,a,b,L_max)) %>% 
+  mutate(stratum = cut(depth,seq(-400,0,100)),
+         length_cm = size_code * 10 + 5,
+         biomass = a * length_cm^b * counts) %>% 
+  droplevels()
+
+# Filter photo info 
+rov.photo_info <- filter(rov.photo_info,dive_name %in% rov.logs$dive_name)
+# Process photo observations
+rov.photo_obs  <- filter(rov.photo_obs,photo_id %in% rov.photo_info$photo_id) %>% 
+  left_join(select(spp_codes,sci_name,sci_name_full,common_name)) %>%
+  rename(sciName = sci_name_full) %>% 
+  filter(str_detect(sciName,"Sebastes|Sebastolobus|Ophiodon|Merluccius")) %>%
+  droplevels()
+
+# Add species info to length data
+rov.lengths    <- filter(rov.lengths,dive_name %in% rov.logs$dive_name) %>% 
+  left_join(select(spp_codes,species_code,sci_name,sci_name_full,common_name,species_group)) %>% 
+  rename(sciName = sci_name_full) %>% 
+  droplevels()
+```
+
+```{r ImportSUB}
+
+```
+
+```{r ImportAUV}
+
+```
+
+```{r MapNav}
+if (save.figs) {
+  rov_counts <- ggplot(rov.nav,aes(long,lat,group = dive_name)) + geom_path() +  
+    geom_point(data = rov.fish,aes(long,lat,size = counts)) + 
+    facet_wrap(~sciName) + 
+    coord_map() + 
+    theme_bw()  
+  ggsave(rov_counts,filename = here("Figs/fig_rov_counts.png"),height = 15, width = 15)
+}
 ```
 
 
-**Comparative estimates of groundfish biomass, abundance, and diversity using various optical sampling methods**
+**Comparing estimates of groundfish biomass, abundance, and diversity from different optical sampling methods** 
 
 Kevin L. Stierhoff^1^, Mary M. Yoklavich^2^, and M. Elizabeth Clarke^3^
 
@@ -69,8 +217,8 @@ Draft date: `r format(Sys.time(), "%d %B %Y")`'
 ^1^Fisheries Resources Division  
 Southwest Fisheries Science Center  
 NOAA-National Marine Fisheries Service  
-8901 La Jolla Shores Drive  
-La Jolla, CA 92037, USA  
+110 McAllister Way  
+Santa Cruz, CA 95060, USA
 
 ^2^Fisheries Ecology Division  
 Southwest Fisheries Science Center  
@@ -254,9 +402,30 @@ Species diversity was similar amongst all three methodologies showing greater sp
 # insert image if Word or HTML output
 if(doc.type == "docx" | doc.type == "html"){
 # read image file and print result
-img <- readPNG("../Tabs/tab_length_weight_table.png")
+img <- readPNG(here("Tabs/tab_length_weight_table.png"))
 grid.raster(img)
 }
+
+if (doc.type == "docx") {
+  regulartable(lw_data) %>% 
+    italic(j = 1) %>%
+    # set_formatter(Area = function(x) sprintf("%.0f", x),
+    #               Biomass = function(x) sprintf("%.0f", x)) %>%
+    align(align = "center",part = "header") %>%
+    autofit()
+  
+} else {
+  kable(lw_data, format = knitr.format,booktabs = T, escape = F,
+        align = c("l","c","r","r"),
+        digits = c(0),
+        format.args = list(big.mark = ",")) %>% 
+    kable_styling(latex_options = c("striped","condensed"),
+                  position = "center") %>%
+    column_spec(1, italic = T) %>% 
+    row_spec(0, align = c("c")) %>%
+    collapse_rows(columns = 1)
+}
+
 ```  
 
 \begin{center}
@@ -271,7 +440,7 @@ grid.raster(img)
 # insert image if Word or HTML output
 if(doc.type == "docx" | doc.type == "html"){
 # read image file and print result
-img <- readPNG("../Figs/fig_ROV_survey_design.png")
+img <- readPNG(here("Figs/fig_ROV_survey_design.png"))
 grid.raster(img)
 }
 ```  
@@ -288,7 +457,7 @@ grid.raster(img)
 # insert image if Word or HTML output
 if(doc.type == "docx" | doc.type == "html"){
 # read image file and print result
-img <- readPNG("../Figs/fig_ROV_survey_design.png")
+img <- readPNG(here("Figs/fig_ROV_survey_design.png"))
 grid.raster(img)
 }
 ```  

@@ -2,3 +2,9 @@
 .Rhistory
 .RData
 .Ruserdata
+*.accdb
+*.pdf
+*.png
+Figs/
+Output/*.csv
+Tabs/
