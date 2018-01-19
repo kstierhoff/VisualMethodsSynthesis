@@ -1,8 +1,11 @@
 ---
 bibliography: bib/ast_bib.bib
 csl: csl/ices-journal-of-marine-science.csl
-header-includes: \usepackage{longtable} \usepackage{graphicx} \usepackage{isomath}
-  \usepackage{upgreek} \usepackage{caption} \usepackage{textcomp}
+header-includes: \usepackage{array} \usepackage{booktabs} \usepackage{calc} \usepackage{caption}
+  \usepackage{colortbl} \usepackage{float} \usepackage{graphicx} \usepackage{hhline} \usepackage{isomath}
+  \usepackage{longtable} \usepackage{multirow} \usepackage{pdflscape} \usepackage{siunitx} \usepackage[table]{xcolor} 
+  \usepackage{tabu} \usepackage{tabularx} \usepackage{textcomp} \usepackage{threeparttable} \usepackage{upgreek}
+  \usepackage{wrapfig} \newcommand{\blandscape}{\begin{landscape}} \newcommand{\elandscape}{\end{landscape}}
 output:
   pdf_document:
     fig_caption: no
@@ -62,10 +65,15 @@ panderOptions('digits', 6); panderOptions('round', 6); panderOptions('keep.trail
 panderOptions('missing', "")
 
 # processing instructions (TRUE/FALSE)
-import.data   <- T # Download data from SQL database
-copy.files    <- T # Copy data files from data to local directory
-redraw.figs   <- T # Draw plots and maps, or use existing
+import.data <- F # Download data from SQL database
+sub.source  <- "Access" # Or DSN if getting from database directly
+save.figs   <- T # Draw plots and maps, or use existing
 ```  
+
+```{r ImportSurveyData}
+strata.area <- read_csv(here("Data/strata_area.csv"))
+```
+
 
 ```{r ImportROV}
 if (import.data) {
@@ -88,16 +96,21 @@ if (import.data) {
   
   save(rov.nav,rov.logs,rov.events,rov.video_obs,rov.photo_info,
        rov.photo_obs,rov.lengths,spp_codes,lw_data,la_data,size_codes,
-       file = here("Data/rov_data.Rdata"))
+       file = here("Data/ROV/rov_data.Rdata"))
 } else {
-  load(here("Data/rov_data.Rdata"))
+  load(here("Data/ROV/rov_data.Rdata"))
 }
+
+# Rename species code colums
+spp_codes <- spp_codes %>% 
+  rename(sciName = sci_name_full,
+         commonName = common_name)
 
 # Remove unused logs
 rov.logs       <- filter(rov.logs,survey_number == 40 & for_analysis == 1)
 
 # Read good nav IDs
-good.rov.nav <- read_csv(here("Data/good_rov_nav.csv"))$nav_id
+good.rov.nav <- read_csv(here("Data/ROV/good_rov_nav.csv"))$nav_id
 
 # Filter, rename nav
 rov.nav        <- filter(rov.nav,dive_name %in% rov.logs$dive_name) %>%
@@ -112,7 +125,16 @@ rov.nav        <- filter(rov.nav,dive_name %in% rov.logs$dive_name) %>%
   select(-camera_altitude,-slant_range,-center_width,-area_r,-cum_area_r) %>% 
   arrange(date_time)
 
-# Calculate area estimates
+# Add lat/long/depth and species information to observations
+rov.video_obs <- filter(rov.video_obs,dive_name %in% rov.logs$dive_name) %>% 
+  left_join(select(rov.nav,nav_id,lat,long,depth)) %>% 
+  left_join(select(spp_codes,species_code,sci_name,sciName,commonName,species_group)) %>% 
+  left_join(select(size_codes,size_code,desc_coast11)) %>% 
+  rename(size_class = desc_coast11) %>%
+  mutate(geol_ps = paste(geol_prim,geol_sec,sep = "")) %>% 
+  droplevels()
+
+# Calculate transect width
 cw.data <- calc_width(rov.nav$pitch,rov.nav$altitude,ROV = "Phantom")
 
 # Merge data
@@ -120,30 +142,23 @@ rov.nav <- bind_cols(rov.nav,cw.data) %>%
   filter(pitch < 0 & slant_range <= 6) %>% 
   mutate(area = center_width * disp)
 
-# Summmarise distance by dive and depth stratum
-rov.nav.summ.stratum <- rov.nav %>% 
+# Summmarise distance by dive and depth stratum for bootstrap analysis
+rov.nav.boot <- rov.nav %>% 
   group_by(dive_name,stratum) %>% 
   summarise(
-    n = n(),
     distance = sum(disp),
-    mean.z = mean(depth)) %>% 
-  arrange(desc(distance))
+    area = sum(area))
 
-# ggplot(rov.nav,aes(long,lat,group = dive_name,colour = stratum)) + geom_path() + coord_map() + theme_bw()
+rov.nav.summ <- rov.nav %>% 
+  group_by(site_general,stratum) %>% 
+  summarise(
+    n.tx = n_distinct(dive_name),
+    distance = sum(disp),
+    area = sum(area)) %>% 
+  arrange(site_general,desc(stratum))
 
 # Filter other data
 rov.events <- filter(rov.events,dive_name %in% rov.logs$dive_name)
-
-# Add lat/long/depth and species information to observations
-rov.video_obs <- filter(rov.video_obs,dive_name %in% rov.logs$dive_name) %>% 
-  left_join(select(rov.nav,nav_id,lat,long,depth)) %>% 
-  left_join(select(spp_codes,species_code,sci_name,sci_name_full,common_name,species_group)) %>% 
-  left_join(select(size_codes,size_code,desc_coast11)) %>% 
-  rename(sciName = sci_name_full,
-         size_class = desc_coast11) %>%
-  mutate(geol_ps = paste(geol_prim,geol_sec,sep = "")) %>% 
-  droplevels()
-
 
 # Format L/W data table
 lw_data <- filter(lw_data,to_use == 1) %>%
@@ -151,7 +166,9 @@ lw_data <- filter(lw_data,to_use == 1) %>%
   rename(sciName = sci_name_full,
          Reference = reference) %>% 
   arrange(sciName) %>% 
-  filter(!is.na(a))
+  filter(!is.na(a)) %>% 
+  left_join(select(spp_codes,sciName,commonName)) %>% 
+  select(sciName, commonName, a, b, L_max, sex, Reference, comment)
 
 # Format L/age data table
 la_data <- filter(la_data,to_use == 1) %>% 
@@ -163,38 +180,158 @@ la_data <- filter(la_data,to_use == 1) %>%
 
 # Extract only fish observations
 rov.fish <- rov.video_obs %>% 
-  filter(str_detect(sciName,"Sebastes|Sebastolobus|Ophiodon|Merluccius")) %>% 
+  filter(str_detect(sciName,"Sebastes|Sebastolobus|Sebastomus|Ophiodon|Merluccius")) %>% 
   left_join(select(lw_data,sciName,a,b,L_max)) %>% 
   mutate(stratum = cut(depth,seq(-400,0,100)),
          length_cm = size_code * 10 + 5,
-         biomass = a * length_cm^b * counts) %>% 
+         weight_g = a * length_cm^b * counts) %>% 
   droplevels()
+
+# ROV data for bootstrap analysis 
+rov.boot <- rov.fish %>% 
+  group_by(dive_name,stratum,sciName) %>% 
+  summarise(
+    counts = sum(counts),
+    weight_g = sum(weight_g)) %>% 
+  left_join(rov.nav.boot) %>% 
+  mutate(
+    abund = counts/area,
+    biomass = weight_g/area) %>% 
+  left_join(select(rov.logs,dive_name,site_general))
+
+# Write to CSV
+write_csv(rov.boot,here("Output/boot_data_rov.csv"))
 
 # Filter photo info 
 rov.photo_info <- filter(rov.photo_info,dive_name %in% rov.logs$dive_name)
 # Process photo observations
 rov.photo_obs  <- filter(rov.photo_obs,photo_id %in% rov.photo_info$photo_id) %>% 
-  left_join(select(spp_codes,sci_name,sci_name_full,common_name)) %>%
-  rename(sciName = sci_name_full) %>% 
-  filter(str_detect(sciName,"Sebastes|Sebastolobus|Ophiodon|Merluccius")) %>%
+  left_join(select(spp_codes,sci_name,sciName,commonName)) %>%
+  filter(str_detect(sciName,"Sebastes|Sebastolobus|Sebastomus|Ophiodon|Merluccius")) %>%
   droplevels()
 
 # Add species info to length data
 rov.lengths    <- filter(rov.lengths,dive_name %in% rov.logs$dive_name) %>% 
-  left_join(select(spp_codes,species_code,sci_name,sci_name_full,common_name,species_group)) %>% 
-  rename(sciName = sci_name_full) %>% 
+  left_join(select(spp_codes,species_code,sci_name,sciName,commonName,species_group)) %>% 
   droplevels()
 ```
 
 ```{r ImportSUB}
+if (import.data) {
+  if (sub.source == "DSN") {
+    sub.con.dsn <- dbConnect(odbc::odbc(),.connection_string = "
+                           Driver={SQL Server};
+                           Server=128.114.3.186;
+                           Database=riglevisbase;
+                           Uid=kevin.stierhoff;
+                           Pwd=rockfish;")
+    
+    # dbListTables(sub.con.dsn)
+    dbDisconnect(sub.con.dsn)    
+  } else {
+    # Configure connection to Acess database
+    sub.con <- channel <- odbcConnectAccess2007(here("Data/SUB/sub_data.accdb"))    
+    # Import CTD data
+    sub.ctd <-  sqlFetch(sub.con, "tbl_Gear_Compare_Yok_ctd") %>% 
+      unite(date,year,month,day,sep = "-") %>% 
+      mutate(time = str_extract(realtime,"\\d{2}:\\d{2}:\\d{2}"),
+             dive_name = paste(dive, transect, sep = "0")) %>% 
+      unite(date_time,date,time,sep = " ") %>% 
+      mutate(date_time = ymd_hms(date_time)) %>% 
+      rename(depth = depth_m,
+             oxy_conc = Oxygen_ml_L,
+             oxy_sat = Oxygen_percent_saturation)
+    
+    # Import NAV data  
+    sub.nav <-  sqlFetch(sub.con, "tbl_Gear_Compare_Yok_nav") %>% 
+      rename(lat       = latitude,
+             long      = longitude,
+             cum_dist  = cum_dist_m) %>% 
+      unite(date,year,month,day,sep = "-") %>% 
+      mutate(time      = str_extract(time,"\\d{2}:\\d{2}:\\d{2}"),
+             dive_name = str_sub(as.character(dv0tx0seg),1,4)) %>% 
+      unite(date_time,date,time,sep = " ") %>% 
+      mutate(date_time = ymd_hms(date_time),
+             dist = c(diff(cum_dist),0)) %>% 
+      filter(transect != 0 & segment != 0 & dist < 5 & dist > -5)
+    
+    # Close connection
+    close(sub.con)
+    
+    # Import density summary
+    sub.dens <- read_excel(here("Data/SUB/sub_data.xlsx"),
+                           sheet = "Yok_Sub_Density_step3") %>% 
+      rename(site_general = bank,
+             dive_name    = dive_tx,
+             sciName      = Scientific_Name,
+             counts       = SumOfSumOffreq,
+             distance     = SumOfdist,
+             stratum      = depth_bin) %>% 
+      mutate(site_general = str_replace(site_general,"footprint","The Footprint"),
+             site_general = str_replace(site_general,"piggy","Piggy Bank"),
+             sciName      = str_replace(sciName,"unidentified sebastomus","Sebastomus spp."))
+    
+    # Get list of fishcodes and sciNames
+    sub.names <- sub.dens %>% 
+      select(sciName,fishcode) %>% 
+      distinct() %>% 
+      arrange(sciName)
+    
+    # Get transect distances
+    sub.dist <- sub.dens %>% 
+      select(dive_name,distance) %>% 
+      distinct() %>% 
+      arrange(dive_name)
 
+    # Import sub density summary
+    sub.biom <- read_excel(here("Data/SUB/sub_data.xlsx"),
+                           sheet = "Yok_Sub_Biomass_step2") %>% 
+      rename(site_general = bank,
+             dive_name    = divetx,
+             counts       = SumOffreq,
+             length_cm    = size_class) %>% 
+      select(-a_coeff,-b_coeff,-tx_area_m2,-weight_g) %>% 
+      mutate(site_general = str_replace(site_general,"footprint","The Footprint"),
+             site_general = str_replace(site_general,"piggy","Piggy Bank"),
+             stratum = cut(depth_bin * -0.9,seq(-400,0,100))) %>% 
+      left_join(sub.names) %>% 
+      left_join(select(lw_data,sciName,a,b,L_max)) %>% 
+      left_join(sub.dist) %>% 
+      mutate(area = distance * 2.5,
+             weight_g = a * length_cm^b * counts)
+  }
+  # Save SUB data
+  save(sub.dens,sub.biom,sub.ctd,sub.nav,file = here("Data/SUB/sub_data.Rdata"))
+} else {
+  # Load SUB data
+  load(here("Data/SUB/sub_data.Rdata"))
+}
+
+# ROV data for bootstrap analysis 
+sub.boot <- sub.biom %>% 
+  group_by(site_general,dive_name,stratum,sciName) %>% 
+  summarise(counts   = sum(counts),
+            weight_g = sum(weight_g)) %>% 
+  left_join(select(sub.biom,dive_name,distance,area)) %>% 
+  mutate(abund   = counts/area,
+         biomass = weight_g/area)
+  
+# Write to CSV
+write_csv(sub.boot,here("Output/boot_data_sub.csv"))
+
+# # Plot sub nav data by dive_name
+# ggplot(sub.nav,aes(long,lat,group = dive_name)) +
+#   geom_path(aes(colour = dive_name)) +
+#   coord_map() +
+#   theme_bw() +
+#   theme(legend.position = "none")
 ```
 
 ```{r ImportAUV}
 
 ```
 
-```{r MapNav}
+```{r MapNav,eval=F}
 if (save.figs) {
   rov_counts <- ggplot(rov.nav,aes(long,lat,group = dive_name)) + geom_path() +  
     geom_point(data = rov.fish,aes(long,lat,size = counts)) + 
@@ -226,15 +363,17 @@ NOAA-National Marine Fisheries Service
 110 McAllister Way  
 Santa Cruz, CA 95060, USA
 
-^3^Office of the Science Director 
+^3^Office of the Science Director  
 Northwest Fisheries Science Center  
 NOAA-National Marine Fisheries Service  
-2725 Montlake Boulevard East 
+2725 Montlake Boulevard East  
 Seattle, WA 98112, USA  
 
-^4^Coral Reef Ecology Division
-Pacific Islands Fisheries Science Center
-NOAA-National Marine Fisheries Service , 
+^4^Coral Reef Ecology Division  
+Pacific Islands Fisheries Science Center  
+NOAA-National Marine Fisheries Service  
+1845 Wasp Boulevard  
+Honolulu, HI 96818  
 
 \newpage
 
@@ -393,44 +532,35 @@ The species encountered by the AUV, ROV, and SUB were comparable.
 
 Species diversity was similar amongst all three methodologies showing greater species richness at the The Footprint and lower richness at Piggy Bank.  The ROV and the SUB included records of rockfish species not identified by the AUV.  This could be due to the fact that the cameras on the AUV are positioned downward, rather than forward facing, allowing fish directly in front of the unit to escape detection. Another possible reason could be the difficulty in identifying some rockfish species from the dorsal view.  The AUV detected comparable numbers of fishes, but the fish were identified to groupings (i.e. Unidentified rockfish, or Sebastomus) as opposed to species.
 
-\newpage  
+\newpage
 
 # Tables  
-**Table 1.** Length-weight table **[UPDATE]**
+**Table 1.** Length-weight table.
 
-```{r LengthWeightTable,fig.height=6.5,fig.width=3.5,eval=FALSE}
-# insert image if Word or HTML output
-if(doc.type == "docx" | doc.type == "html"){
-# read image file and print result
-img <- readPNG(here("Tabs/tab_length_weight_table.png"))
-grid.raster(img)
-}
+```{r LengthWeightTable}
+# Get species in study
+lw.spp <- unique(rov.boot$sciName)
 
+# Format and print L/W table
 if (doc.type == "docx") {
-  regulartable(lw_data) %>% 
+  regulartable(filter(lw_data,sciName %in% lw.spp)) %>% 
     italic(j = 1) %>%
     # set_formatter(Area = function(x) sprintf("%.0f", x),
     #               Biomass = function(x) sprintf("%.0f", x)) %>%
     align(align = "center",part = "header") %>%
     autofit()
-  
 } else {
-  kable(lw_data, format = knitr.format,booktabs = T, escape = F,
-        align = c("l","c","r","r"),
-        digits = c(0),
-        format.args = list(big.mark = ",")) %>% 
-    kable_styling(latex_options = c("striped","condensed"),
+  kable(filter(lw_data,sciName %in% lw.spp), 
+        format = knitr.format,booktabs = T, escape = T,
+        align = c("l","l","r","r","l","r","l","l"),
+        digits = c(3)) %>% 
+    kable_styling(latex_options = c("striped","condensed",
+                                    "repeat_header","scale_down"),
                   position = "center") %>%
     column_spec(1, italic = T) %>% 
-    row_spec(0, align = c("c")) %>%
-    collapse_rows(columns = 1)
+    row_spec(0, align = c("c"))
 }
-
 ```  
-
-\begin{center}
-\includegraphics[width = 5 in]{../Tabs/tab_length_weight_table.png}
-\end{center}
 
 \newpage  
 

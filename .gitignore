@@ -5,5 +5,7 @@
 *.accdb
 *.pdf
 *.png
+tex2pdf*
 Figs/
 Output/*.csv
+Reports/
