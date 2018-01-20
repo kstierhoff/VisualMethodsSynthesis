@@ -50,7 +50,10 @@ if (is.null(doc.type)) {doc.type <- "html"}
 
 # global knitr chunk options
 knitr::opts_chunk$set(echo = F, warning = F, message = F, dev = "png", 
-                      dev.args = list(type = "cairo"), dpi = 150)  
+                      dev.args = list(type = "cairo"), dpi = 150)
+
+# set global knitr options
+options(knitr.kable.NA = '')
 
 # determine global knitr table format
 if (doc.type == "latex") {
@@ -535,25 +538,38 @@ Species diversity was similar amongst all three methodologies showing greater sp
 \newpage
 
 # Tables  
-**Table 1.** Length-weight table.
+
+**Table 1.** Coefficients used to convert total length (_TL_; cm) to weight (g) for biomass estimates.
 
 ```{r LengthWeightTable}
 # Get species in study
-lw.spp <- unique(rov.boot$sciName)
+lw_spp <- sort(unique(rov.boot$sciName))
+
+# Subset and format table
+lw_table <- lw_data %>%
+  filter(sciName %in% lw_spp) %>% 
+  rename(
+      "Scientific name" = sciName,
+      "Common name" = commonName,
+      Sex = sex,
+      Comment = comment) 
 
 # Format and print L/W table
 if (doc.type == "docx") {
-  regulartable(filter(lw_data,sciName %in% lw.spp)) %>% 
+  lw_table %>% 
+    regulartable() %>% 
     italic(j = 1) %>%
-    # set_formatter(Area = function(x) sprintf("%.0f", x),
-    #               Biomass = function(x) sprintf("%.0f", x)) %>%
     align(align = "center",part = "header") %>%
     autofit()
 } else {
-  kable(filter(lw_data,sciName %in% lw.spp), 
-        format = knitr.format,booktabs = T, escape = T,
-        align = c("l","l","r","r","l","r","l","l"),
-        digits = c(3)) %>% 
+  lw_table %>% 
+    rename(
+      "$L_\\mathrm{max}$" = L_max,
+      "$a$" = a,
+      "$b$" = b) %>% 
+    kable(format = knitr.format,booktabs = T, escape = F,
+          align = c("l","l","r","r","r","l","l","l"),
+          digits = c(0,0,4,4,1,0,0,0)) %>% 
     kable_styling(latex_options = c("striped","condensed",
                                     "repeat_header","scale_down"),
                   position = "center") %>%
