@@ -366,7 +366,7 @@ if (save.figs) {
 ```{r ROV_bootstrap}
 if (do.boot) {
   # Bootstrap ROV abundance and biomass by strata
-  B = 100
+  B = 1000
   # i = "Sebastes levis"
   # j = "The Footprint"
   # k = "(-200,-100]"
@@ -377,8 +377,8 @@ if (do.boot) {
       for (k in unique(boot.data.rov$stratum)) {
         boot.data <- filter(boot.data.rov, sciName == i & site == j & stratum == k)
         if (nrow(boot.data) > 0) {
-          boot.abund <- as.numeric(rep(NA,B))
-          boot.biom  <- as.numeric(rep(NA,B))
+          boot.abund <- NA_real_
+          boot.biom  <- NA_real_
           for (ii in seq(1:B)) {
             boot.abund[ii] <- mean(sample(boot.data$dens_n,nrow(boot.data),replace = T))
             boot.biom[ii]  <- mean(sample(boot.data$dens_g,nrow(boot.data),replace = T))
@@ -410,6 +410,9 @@ boot.summ.stratum.rov <- boot.df.rov %>%
     biom.ci.low  = quantile(boot.biom, 0.025),
     biom.ci.hi   = quantile(boot.biom, 0.975))
 
+# ggplot(boot.df.rov, aes(boot.abund, fill = stratum)) +
+#   geom_density(alpha = 0.5) + facet_wrap(~sciName, scales = "free") + theme_bw()
+
 boot.samples.rov <- boot.df.rov %>% 
   group_by(platform,sciName,site,sample) %>% 
   summarise(
@@ -428,6 +431,9 @@ boot.summ.sample.rov <- boot.samples.rov %>%
     biom.cv      = sd(boot.biom)/biom.mean * 100,
     biom.ci.low  = quantile(boot.biom, 0.025),
     biom.ci.hi   = quantile(boot.biom, 0.975))
+
+# ggplot(boot.samples.rov, aes(boot.abund, fill = site)) +
+#   geom_density(alpha = 0.5) + facet_wrap(~sciName, scales = "free") + theme_bw()
 ```
 
 **Comparing estimates of groundfish biomass, abundance, and diversity from different optical sampling methods** 
