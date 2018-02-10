@@ -18,7 +18,8 @@ output:
 # List packages required to run the script
 pkgs <- c("tidyverse","knitr","swfscMisc","lubridate","here","boot",
           "maps","readxl","maptools","png","mapdata","sf","flextable",
-          "cowplot","devtools","kableExtra","RODBC","pander","DBI","odbc")
+          "cowplot","devtools","kableExtra","RODBC","pander","DBI",
+          "rnaturalearth","rnaturalearthhires","odbc")
 # Install and load all CRAN packages provided from a character vector
 load_pkgs = function(pkgs){
   new_pkgs = pkgs[!(pkgs %in% installed.packages()[ ,'Package'])]
@@ -82,6 +83,7 @@ import.data <- T # Download data from SQL database
 sub.source  <- "Access" # Or DSN if getting from database directly
 save.figs   <- T # Draw plots and maps, or use existing
 do.boot     <- F # Conduct bootstrap resampling
+get.sf      <- F # Download costline data
 ```  
 
 ```{r ImportSurveyData}
@@ -353,11 +355,47 @@ write_csv(boot.data.sub,here("Output/boot_data_sub.csv"))
 ```
 
 ```{r MapNav,eval=F}
+# rnaturalearth vignette
+# https://cran.r-project.org/web/packages/rnaturalearth/vignettes/rnaturalearth.html
+
+# Get land features
+if (get.sf) {
+  # Download highres polygons for N. America
+  na_sf <- ne_countries(type = 'countries', scale = 'large',returnclass = "sf")
+  # Save sf objects
+  save(na_sf,file = here("Data/GIS/na_sf.Rdata"))
+} else {
+  # Load sf objects
+  load(here("Data/GIS/na_sf.Rdata"))
+}
+
+# Read shapefiles
+sample_frame <- st_read(here("Data/GIS/sampling_frame.shp"))
+depth_strata <- st_read(here("Data/GIS/depth_polygons.shp"))
+depth_contours <- st_read(here("Data/GIS/depth_contours.shp"))
+nav.auv <-st_read(here("Data/GIS/auv_nav_lines.shp"))
+
+# Read rasters
+
+# Map ROV tracks
+ggplot(depth_strata) + geom_sf(aes(fill = stratum_z),alpha = 0.75) +
+  geom_sf(data = depth_contours, colour = "black", size = 1) + 
+  geom_sf(data = sample_frame, colour = "red", size = 2, fill = NA,linetype = "dashed") + 
+  geom_path(data = nav.rov, aes(long,lat, group = dive_name), colour = "black", size = 1.5) +
+  geom_path(data = nav.sub, aes(long,lat, group = dive_name), colour = "green", size = 1.5) +
+  geom_sf(data = nav.auv, colour = "orange", size = 1) +
+  scale_fill_manual(name = "Depth", values = c("white","lightblue1","royalblue","royalblue4")) +
+  theme_bw() +
+  xlab("Longitude") + ylab("Latitude") +
+  xlim(-119.525, -119.435) + ylim(33.915, 33.97)
+
+# Change gridline colors
+
 if (save.figs) {
   rov_counts <- ggplot(nav.rov,aes(long,lat,group = dive_name)) + geom_path() +  
     geom_point(data = obs.rov,aes(long,lat,size = counts)) + 
-    facet_wrap(~sciName) + 
-    coord_map() + 
+    facet_wrap(~sciName) +
+    coord_sf() + 
     theme_bw()  
   ggsave(rov_counts,filename = here("Figs/fig_rov_counts.png"),height = 15, width = 15)
 }

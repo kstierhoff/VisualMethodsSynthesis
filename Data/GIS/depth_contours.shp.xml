@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20180209</CreaDate><CreaTime>16524200</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="C:\Program Files\ArcGIS\Desktop10.0\ArcToolbox\Toolboxes\Spatial Analyst Tools.tbx\Contour" Date="20110907" Time="171244">Contour "Bathymetry\Multibeam Layers\NE Channel Is\bathyutmg0" C:\GIS\gis_data\bathymetry\ne_channel_islands_USGS\ne_ci_contours_100m.shp 100 0 1</Process></lineage></DataProperties></Esri></metadata>
