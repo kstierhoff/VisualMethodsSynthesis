@@ -19,7 +19,7 @@ output:
 pkgs <- c("tidyverse","knitr","swfscMisc","lubridate","here","boot",
           "maps","readxl","maptools","png","mapdata","sf","flextable",
           "cowplot","devtools","kableExtra","RODBC","pander","DBI",
-          "rnaturalearth","rnaturalearthhires","odbc")
+          "rnaturalearth","odbc")
 # Install and load all CRAN packages provided from a character vector
 load_pkgs = function(pkgs){
   new_pkgs = pkgs[!(pkgs %in% installed.packages()[ ,'Package'])]
@@ -37,23 +37,12 @@ if ("surveyR" %in% installed.packages()[ ,'Package'] == F) {
 # Load surveyR
 library(surveyR)
 
-load_pkgs(pkgs)
-# Install and load patchwork package from github
-if ("patchwork" %in% installed.packages()[ ,'Package'] == F) {
-  install_github("thomasp85/patchwork")
-}
-# Load patchwork
-library(patchwork)
-
 # Install and load slipper package from github
 if ("slipper" %in% installed.packages()[ ,'Package'] == F) {
   install_github("jtleek/slipper")
 }
 # Load patchwork
 library(slipper)
-
-# set system time zone to GMT
-Sys.setenv(tz = "GMT")
 
 # determines method of table generation (whether kable or pander) for best formatting
 doc.type <- knitr::opts_knit$get('rmarkdown.pandoc.to')
@@ -79,7 +68,7 @@ if (doc.type == "latex") {
 # panderOptions('missing', "")
 
 # processing instructions (TRUE/FALSE)
-import.data <- T # Download data from SQL database
+import.data <- F # Download data from SQL database
 sub.source  <- "Access" # Or DSN if getting from database directly
 save.figs   <- T # Draw plots and maps, or use existing
 do.boot     <- F # Conduct bootstrap resampling
@@ -378,7 +367,7 @@ nav.auv <-st_read(here("Data/GIS/auv_nav_lines.shp"))
 # Read rasters
 
 # Map ROV tracks
-ggplot(depth_strata) + geom_sf(aes(fill = stratum_z),alpha = 0.75) +
+survey.map <- ggplot(depth_strata) + geom_sf(aes(fill = stratum_z),alpha = 0.75) +
   geom_sf(data = depth_contours, colour = "black", size = 1) + 
   geom_sf(data = sample_frame, colour = "red", size = 2, fill = NA,linetype = "dashed") + 
   geom_path(data = nav.rov, aes(long,lat, group = dive_name), colour = "black", size = 1.5) +
@@ -388,6 +377,9 @@ ggplot(depth_strata) + geom_sf(aes(fill = stratum_z),alpha = 0.75) +
   theme_bw() +
   xlab("Longitude") + ylab("Latitude") +
   xlim(-119.525, -119.435) + ylim(33.915, 33.97)
+
+ggsave(survey.map, file = here("Figs/fig_site_map.png"),
+       height = 12, width = 12)
 
 # Change gridline colors
 
