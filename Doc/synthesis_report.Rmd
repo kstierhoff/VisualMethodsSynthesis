@@ -76,7 +76,14 @@ get.sf      <- F # Download costline data
 ```  
 
 ```{r ImportSurveyData}
-strata.area <- read_csv(here("Data/strata_area.csv"))
+strata.area <- read_csv(here("Data/strata_area.csv")) %>% 
+  rename(site = site_name) %>% 
+  mutate(stratum_area = area*1e6) %>% 
+  select(-area)
+# Summarize strata area by site
+site.area <- strata.area %>% 
+  group_by(site) %>% 
+  summarize(stratum_area = sum(stratum_area))
 ```
 
 
@@ -158,7 +165,7 @@ nav.rov.summ <- nav.rov %>%
   summarise(
     n.tx = n_distinct(dive_name),
     distance = sum(disp),
-    area = sum(area)) %>% 
+    survey_area = sum(area)) %>% 
   arrange(site,desc(stratum))
 
 # Filter other data
@@ -202,13 +209,19 @@ obs.rov <- video.obs.rov %>%
 boot.data.rov <- obs.rov %>% 
   group_by(dive_name,stratum,sciName) %>% 
   summarise(
-    counts   = sum(counts),
-    weight_g = sum(weight_g)) %>% 
+    counts      = sum(counts),
+    weight_g    = sum(weight_g)) %>% 
   left_join(nav.rov.boot) %>% 
+  left_join(select(logs.rov,dive_name,site)) %>% 
   mutate(
-    dens_n   = counts/area, # Numeric density (n/m)
-    dens_g   = weight_g/area) %>% # Biomass density (g/m)
-  left_join(select(logs.rov,dive_name,site))
+    dens_n      = counts/area,         # Numeric density (n/m)
+    dens_g      = weight_g/area) %>%   # Biomass density (g/m)
+  mutate(
+    dens_n      = counts/area,         # Numeric density (n/m)
+    dens_g      = weight_g/area) %>%   # Biomass density (g/m)
+  left_join(strata.area) %>%
+  mutate(abund  = dens_n*stratum_area, # Biomass (g)
+         biom   = dens_g*stratum_area) # Abundance (n)
 
 # Write to CSV
 write_csv(boot.data.rov,here("Output/boot_data_rov.csv"))
@@ -308,7 +321,7 @@ if (import.data) {
       left_join(names.sub) %>% 
       left_join(select(lw.data,sciName,a,b,L_max)) %>% 
       left_join(nav.sub.summ) %>% 
-      mutate(area = distance * 2.5,
+      mutate(survey_area = distance * 2.5,
              weight_g = a * length_cm^b * counts)
   }
   # Save SUB data
@@ -325,18 +338,17 @@ boot.data.sub <- biomass.sub %>%
             weight_g = sum(weight_g)) %>% 
   left_join(distinct(select(biomass.sub,dive_name,distance,area))) %>% 
   mutate(
-    dens_n = counts/area, # Numeric density (n/m)
-    dens_g = weight_g/area) # Biomass density (g/m)
-  
+    dens_n      = counts/area,         # Numeric density (n/m)
+    dens_g      = weight_g/area) %>%   # Biomass density (g/m)
+  mutate(
+    dens_n      = counts/area,         # Numeric density (n/m)
+    dens_g      = weight_g/area) %>%   # Biomass density (g/m)
+  left_join(strata.area) %>%
+  mutate(abund  = dens_n*stratum_area, # Biomass (g)
+         biom   = dens_g*stratum_area) # Abundance (n)
+
 # Write to CSV
 write_csv(boot.data.sub,here("Output/boot_data_sub.csv"))
-
-# # Plot sub nav data by dive_name
-# ggplot(nav.sub,aes(long,lat,group = dive_name)) +
-#   geom_path(aes(colour = dive_name)) +
-#   coord_map() +
-#   theme_bw() +
-#   theme(legend.position = "none")
 ```
 
 ```{r ImportAUV}
@@ -410,8 +422,8 @@ if (do.boot) {
           boot.abund <- NA_real_
           boot.biom  <- NA_real_
           for (ii in seq(1:B)) {
-            boot.abund[ii] <- mean(sample(boot.data$dens_n,nrow(boot.data),replace = T))
-            boot.biom[ii]  <- mean(sample(boot.data$dens_g,nrow(boot.data),replace = T))
+            boot.abund[ii] <- mean(sample(boot.data$abund,nrow(boot.data),replace = T))
+            boot.biom[ii]  <- mean(sample(boot.data$biom,nrow(boot.data),replace = T))
           }
           boot.df.rov <- rbind(boot.df.rov,
                                data.frame(platform = "ROV", sciName = i, site = j, 
@@ -470,9 +482,7 @@ boot.summ.sample.rov <- boot.samples.rov %>%
 if (do.boot) {
   # Bootstrap ROV abundance and biomass by strata
   B = 1000
-  # i = "Sebastes levis"
-  # j = "The Footprint"
-  # k = "(-200,-100]"
+  # Create data frame for storing results
   boot.df.sub <- data.frame()
   
   for (i in unique(boot.data.sub$sciName)) {
@@ -483,10 +493,10 @@ if (do.boot) {
           boot.abund <- NA_real_
           boot.biom  <- NA_real_
           for (ii in seq(1:B)) {
-            boot.abund[ii] <- mean(sample(boot.data$dens_n,nrow(boot.data),replace = T))
-            boot.biom[ii]  <- mean(sample(boot.data$dens_g,nrow(boot.data),replace = T))
+            boot.abund[ii] <- mean(sample(boot.data$abund,nrow(boot.data),replace = T))
+            boot.biom[ii]  <- mean(sample(boot.data$biom,nrow(boot.data),replace = T))
           }
-          boot.df.sub <- rbind(boot.df.rov,
+          boot.df.sub <- rbind(boot.df.sub,
                                data.frame(platform = "SUB", sciName = i, site = j, 
                                           stratum = k, sample = seq(1,B),
                                           boot.abund, boot.biom))
@@ -537,6 +547,23 @@ boot.summ.sample.sub <- boot.samples.sub %>%
 
 # ggplot(boot.samples.rov, aes(boot.abund, fill = site)) +
 #   geom_density(alpha = 0.5) + facet_wrap(~sciName, scales = "free") + theme_bw()
+```
+
+```{r ALL_bootstrap}
+boot.all <- bind_rows(boot.summ.sample.rov,boot.summ.sample.sub) %>% 
+  ungroup() %>% 
+  mutate(sciName = fct_rev(factor(sciName)),
+         biom_cv_cut = cut(biom.cv,c(0,25,50,75,100)),
+         abund_cv_cut = cut(abund.cv,c(0,25,50,75,100))) %>% 
+  left_join(site.area)
+
+ggplot(filter(boot.all, biom.cv > 0), aes(factor(sciName),platform)) + geom_raster(aes(fill = biom_cv_cut)) + 
+  scale_fill_manual(values = c("green","yellow","orange","red")) +
+  geom_text(aes(label = round(biom.mean,0))) +
+  coord_flip() + 
+  facet_wrap(~site, nrow = 1) + theme_bw()
+
+ggsave(here("Figs/fig_boot_cv_raster.png"),height = 7, width = 7)
 ```
 
 **Comparing estimates of groundfish biomass, abundance, and diversity from different optical sampling methods** 
