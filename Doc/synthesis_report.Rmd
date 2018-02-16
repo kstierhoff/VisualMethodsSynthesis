@@ -77,7 +77,8 @@ get.sf      <- F # Download costline data
 
 ```{r ImportSurveyData}
 strata.area <- read_csv(here("Data/strata_area.csv")) %>% 
-  rename(site = site_name) %>% 
+  rename(site = site_name,
+         stratum = depth_stratum) %>% 
   mutate(stratum_area = area*1e6) %>% 
   select(-area)
 # Summarize strata area by site
@@ -198,30 +199,23 @@ obs.rov <- video.obs.rov %>%
          weight_g = a * length_cm^b * counts) %>% 
   droplevels()
 
-# obs.rov.summ <- obs.rov %>% 
-#   group_by(sciName,length_cm) %>% 
-#   summarise(counts = sum(counts))
-# 
 # ggplot(obs.rov.summ, aes(length_cm, counts)) + geom_bar(stat = "identity") + 
 #   facet_wrap(~sciName, scales = "free_y") + theme_bw() 
 
 # ROV data for bootstrap analysis 
 boot.data.rov <- obs.rov %>% 
   group_by(dive_name,stratum,sciName) %>% 
-  summarise(
-    counts      = sum(counts),
-    weight_g    = sum(weight_g)) %>% 
-  left_join(nav.rov.boot) %>% 
-  left_join(select(logs.rov,dive_name,site)) %>% 
-  mutate(
-    dens_n      = counts/area,         # Numeric density (n/m)
-    dens_g      = weight_g/area) %>%   # Biomass density (g/m)
-  mutate(
-    dens_n      = counts/area,         # Numeric density (n/m)
-    dens_g      = weight_g/area) %>%   # Biomass density (g/m)
+  summarise(counts      = sum(counts),
+            weight_g    = sum(weight_g)) %>% 
+  left_join(nav.rov.boot) %>%
+  left_join(select(logs.rov,dive_name,site)) %>%
+  mutate(dens_n = counts/area,         # Numeric density (n/m)
+         dens_g = weight_g/area) %>%   # Biomass density (g/m)
   left_join(strata.area) %>%
-  mutate(abund  = dens_n*stratum_area, # Biomass (g)
-         biom   = dens_g*stratum_area) # Abundance (n)
+  mutate(abund = dens_n*stratum_area, # Abundance (n)
+         biom  = dens_g*stratum_area,
+         platform = "ROV") %>%   # Biomass (g)
+  arrange(desc(counts))
 
 # Write to CSV
 write_csv(boot.data.rov,here("Output/boot_data_rov.csv"))
@@ -340,19 +334,38 @@ boot.data.sub <- biomass.sub %>%
   mutate(
     dens_n      = counts/area,         # Numeric density (n/m)
     dens_g      = weight_g/area) %>%   # Biomass density (g/m)
-  mutate(
-    dens_n      = counts/area,         # Numeric density (n/m)
-    dens_g      = weight_g/area) %>%   # Biomass density (g/m)
   left_join(strata.area) %>%
-  mutate(abund  = dens_n*stratum_area, # Biomass (g)
-         biom   = dens_g*stratum_area) # Abundance (n)
+  mutate(abund  = dens_n*stratum_area, # Abundance (n)
+         biom   = dens_g*stratum_area,
+         platform = "SUB") # Biomass (g)
 
 # Write to CSV
 write_csv(boot.data.sub,here("Output/boot_data_sub.csv"))
 ```
 
 ```{r ImportAUV}
+boot.data.all <- bind_rows(boot.data.rov, boot.data.sub)
 
+boot.data.summ <- boot.data.all %>% 
+  group_by(sciName, platform) %>% 
+  summarize(counts = sum(counts)) %>% 
+  spread(platform,counts) %>% 
+  mutate(ALL = sum(ROV,SUB,na.rm = T)) %>% 
+  arrange(desc(ALL))
+
+write.csv(boot.data.summ,file = here("Output/obs_summ.csv"), row.names = F, quote = F, na = "-")
+
+tx.rov <- n_distinct(nav.rov$dive_name)
+dist.rov <- sum(nav.rov$disp)/1000
+area.rov <- sum(nav.rov$area)/1000
+
+tx.sub <- n_distinct(nav.sub$dive_name)
+dist.sub <- sum(nav.sub$dist)/1000
+area.sub <- dist.sub * 2.5
+
+nav.summ.sub <- nav.sub %>% 
+  group_by(site) %>% 
+  summarize(transects = n_distinct(dive_name))
 ```
 
 ```{r MapNav,eval=F}
@@ -423,7 +436,7 @@ if (do.boot) {
           boot.biom  <- NA_real_
           for (ii in seq(1:B)) {
             boot.abund[ii] <- mean(sample(boot.data$abund,nrow(boot.data),replace = T))
-            boot.biom[ii]  <- mean(sample(boot.data$biom,nrow(boot.data),replace = T))
+            boot.biom[ii]  <- mean(sample(boot.data$biom,nrow(boot.data),replace = T))/1000 # Biomass (kg)
           }
           boot.df.rov <- rbind(boot.df.rov,
                                data.frame(platform = "ROV", sciName = i, site = j, 
@@ -472,7 +485,8 @@ boot.summ.sample.rov <- boot.samples.rov %>%
     biom.mean    = mean(boot.biom),
     biom.cv      = sd(boot.biom)/biom.mean * 100,
     biom.ci.low  = quantile(boot.biom, 0.025),
-    biom.ci.hi   = quantile(boot.biom, 0.975))
+    biom.ci.hi   = quantile(boot.biom, 0.975)) %>% 
+  arrange(sciName, site)
 
 # ggplot(boot.samples.rov, aes(boot.abund, fill = site)) +
 #   geom_density(alpha = 0.5) + facet_wrap(~sciName, scales = "free") + theme_bw()
@@ -494,7 +508,7 @@ if (do.boot) {
           boot.biom  <- NA_real_
           for (ii in seq(1:B)) {
             boot.abund[ii] <- mean(sample(boot.data$abund,nrow(boot.data),replace = T))
-            boot.biom[ii]  <- mean(sample(boot.data$biom,nrow(boot.data),replace = T))
+            boot.biom[ii]  <- mean(sample(boot.data$biom,nrow(boot.data),replace = T))/1000 # Biomass (kg)
           }
           boot.df.sub <- rbind(boot.df.sub,
                                data.frame(platform = "SUB", sciName = i, site = j, 
@@ -549,22 +563,173 @@ boot.summ.sample.sub <- boot.samples.sub %>%
 #   geom_density(alpha = 0.5) + facet_wrap(~sciName, scales = "free") + theme_bw()
 ```
 
-```{r ALL_bootstrap}
-boot.all <- bind_rows(boot.summ.sample.rov,boot.summ.sample.sub) %>% 
-  ungroup() %>% 
+```{r AUV_bootstrap,eval = T}
+boot.summ.sample.auv <- boot.summ.sample.rov[0, ]
+```
+
+```{r ALL_bootstrap_summary}
+boot.summ.sample.all <- bind_rows(boot.summ.sample.rov,boot.summ.sample.sub) %>% 
+  ungroup() %>%
   mutate(sciName = fct_rev(factor(sciName)),
          biom_cv_cut = cut(biom.cv,c(0,25,50,75,100)),
-         abund_cv_cut = cut(abund.cv,c(0,25,50,75,100))) %>% 
-  left_join(site.area)
+         abund_cv_cut = cut(abund.cv,c(0,25,50,75,100)),
+         sciName = str_replace(sciName,"Sebastes miniatus","Sebastes crocotulus")) %>% 
+  left_join(site.area) 
 
-ggplot(filter(boot.all, biom.cv > 0), aes(factor(sciName),platform)) + geom_raster(aes(fill = biom_cv_cut)) + 
-  scale_fill_manual(values = c("green","yellow","orange","red")) +
-  geom_text(aes(label = round(biom.mean,0))) +
-  coord_flip() + 
-  facet_wrap(~site, nrow = 1) + theme_bw()
+main.spp <- c("Sebastes paucispinis", "Sebastes levis","Sebastes chlorostictus","Ophiodon elongatus",
+              "Sebastes crocotulus","Sebastes rufus")
 
-ggsave(here("Figs/fig_boot_cv_raster.png"),height = 7, width = 7)
+fig.width = 5
+fig.height = 7
+
+ggplot(boot.summ.sample.all, aes(factor(sciName),platform)) + geom_raster(aes(fill = biom.cv)) + 
+  scale_fill_gradientn(name = "CV (%)\n", colours = c("green","lightgreen","yellow","orange","red"), limits = c(0,100)) +
+  geom_text(aes(label = prettyNum(round(biom.mean,0), big.mark = ",")),size = 2.5) +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  coord_flip() + xlab("Species") + ylab("Vehicle") +
+  facet_wrap(~site, nrow = 1) + 
+  theme_bw() +
+  theme(axis.text.y = element_text(face = "italic")) +
+  ggtitle("Biomass (kg)")
+
+ggsave(here("Figs/fig_raster_biomass_all.png"),height = fig.height, width = fig.width)
+
+ggplot(filter(boot.summ.sample.all,sciName %in% main.spp), aes(factor(sciName),platform)) + geom_raster(aes(fill = biom.cv)) + 
+  scale_fill_gradientn(name = "CV (%)\n", colours = c("green","lightgreen","yellow","orange","red"), limits = c(0,100)) +
+  geom_text(aes(label = prettyNum(round(biom.mean,0), big.mark = ",")),size = 3) +  
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  coord_flip() + xlab("Species") + ylab("Vehicle") +
+  facet_wrap(~site, nrow = 1) + 
+  theme_bw() +
+  theme(axis.text.y = element_text(face = "italic")) +
+  ggtitle("Biomass (kg)")
+
+ggsave(here("Figs/fig_raster_biomass_select.png"),height = 5, width = 5)
+
+ggplot(boot.summ.sample.all, aes(factor(sciName),platform)) + geom_raster(aes(fill = abund.cv)) + 
+  scale_fill_gradientn(name = "CV (%)\n", colours = c("green","lightgreen","yellow","orange","red"), limits = c(0,100)) +
+  geom_text(aes(label = prettyNum(round(abund.mean,0), big.mark = ",")),size = 2.5) +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  coord_flip() + xlab("Species") + ylab("Vehicle") +
+  facet_wrap(~site, nrow = 1) + 
+  theme_bw() +
+  theme(axis.text.y = element_text(face = "italic")) +
+  ggtitle("Abundance")
+
+ggsave(here("Figs/fig_raster_abundance_all.png"),height = fig.height, width = fig.width)
+
+ggplot(filter(boot.summ.sample.all,sciName %in% main.spp), aes(factor(sciName),platform)) + geom_raster(aes(fill = abund.cv)) + 
+  scale_fill_gradientn(name = "CV (%)\n", colours = c("green","lightgreen","yellow","orange","red"), limits = c(0,100)) +
+  geom_text(aes(label = prettyNum(round(abund.mean,0), big.mark = ",")),size = 3) +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  coord_flip() + xlab("Species") + ylab("Vehicle") +
+  facet_wrap(~site, nrow = 1) + 
+  theme_bw() +
+  theme(axis.text.y = element_text(face = "italic")) +
+  ggtitle("Abundance")
+
+ggsave(here("Figs/fig_raster_abundance_select.png"),height = 5, width = 5)
 ```
+
+```{r ALL_bootstrap}
+boot.samples.all <- bind_rows(boot.samples.rov, boot.samples.sub) %>% 
+  ungroup() %>% 
+  mutate(sciName = str_replace(sciName,"Sebastes miniatus","Sebastes crocotulus"))
+
+rov.colour = "yellow"
+sub.colour = "blue"
+
+ggplot(boot.samples.all, aes(boot.abund)) + geom_histogram(aes(fill = platform), alpha = 0.5) +
+  facet_wrap(~sciName, scales = "free") + 
+  scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() 
+
+# Footprint data
+boot.abund.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% main.spp & site == "The Footprint"), aes(boot.abund)) + 
+  geom_density(aes(fill = platform), alpha = 0.5) +
+  # geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "The Footprint"), 
+  #            aes(xintercept = abund.ci.low, colour = platform), linetype = "dashed", size = 0.5) +
+  # geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "The Footprint"), 
+  #            aes(xintercept = abund.ci.hi, colour = platform), linetype = "dashed", size = 0.5) +
+  geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "The Footprint"), 
+             aes(xintercept = abund.mean, colour = platform), size = 1) +
+  facet_wrap(~sciName, scales = "free", nrow = 1) + 
+  scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  theme(strip.text.x = element_text(face = "italic"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab("Abundance") + ylab("Density")
+
+ggsave(boot.abund.dens.plot, filename = here("Figs/fig_density_abundance_footprint.png"), height = 2, width = 15)
+
+boot.biom.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% main.spp & site == "The Footprint"), aes(boot.biom)) + 
+  geom_density(aes(fill = platform), alpha = 0.5) +
+  # geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "The Footprint"), 
+  #            aes(xintercept = abund.ci.low, colour = platform), linetype = "dashed", size = 0.5) +
+  # geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "The Footprint"), 
+  #            aes(xintercept = abund.ci.hi, colour = platform), linetype = "dashed", size = 0.5) +
+  geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "The Footprint"), 
+             aes(xintercept = biom.mean, colour = platform), size = 1) +
+  facet_wrap(~sciName, scales = "free", nrow = 1) + 
+  scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  theme(strip.text.x = element_text(face = "italic"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab("Biomass") + ylab("Density")
+
+ggsave(boot.biom.dens.plot, filename = here("Figs/fig_density_biomass_footprint.png"), height = 2, width = 15)
+
+boot.dens.plot.all <- plot_grid(boot.abund.dens.plot,boot.biom.dens.plot, ncol = 1)
+
+ggsave(boot.dens.plot.all, filename = here("Figs/fig_density_both_footprint.png"), height = 5, width = 12)
+
+# Piggy Bank data
+boot.abund.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% main.spp & site == "Piggy Bank"), aes(boot.abund)) + 
+  geom_density(aes(fill = platform), alpha = 0.5) +
+  # geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "The Footprint"), 
+  #            aes(xintercept = abund.ci.low, colour = platform), linetype = "dashed", size = 0.5) +
+  # geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "The Footprint"), 
+  #            aes(xintercept = abund.ci.hi, colour = platform), linetype = "dashed", size = 0.5) +
+  geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "Piggy Bank"), 
+             aes(xintercept = abund.mean, colour = platform), size = 1) +
+  facet_wrap(~sciName, scales = "free", nrow = 1) + 
+  scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  theme(strip.text.x = element_text(face = "italic"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab("Abundance") + ylab("Density")
+
+ggsave(boot.abund.dens.plot, filename = here("Figs/fig_density_abundance_piggy.png"), height = 2, width = 15)
+
+boot.biom.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% main.spp & site == "Piggy Bank"), aes(boot.biom)) + 
+  geom_density(aes(fill = platform), alpha = 0.5) +
+  # geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "The Footprint"), 
+  #            aes(xintercept = abund.ci.low, colour = platform), linetype = "dashed", size = 0.5) +
+  # geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "The Footprint"), 
+  #            aes(xintercept = abund.ci.hi, colour = platform), linetype = "dashed", size = 0.5) +
+  geom_vline(data = filter(boot.summ.sample.all, sciName %in% main.spp & site == "Piggy Bank"), 
+             aes(xintercept = biom.mean, colour = platform), size = 1) +
+  facet_wrap(~sciName, scales = "free", nrow = 1) + 
+  scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  theme(strip.text.x = element_text(face = "italic"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab("Biomass") + ylab("Density")
+
+ggsave(boot.biom.dens.plot, filename = here("Figs/fig_density_biomass_piggy.png"), height = 2, width = 15)
+
+boot.dens.plot.all <- plot_grid(boot.abund.dens.plot,boot.biom.dens.plot, ncol = 1)
+
+ggsave(boot.dens.plot.all, filename = here("Figs/fig_density_both_piggy.png"), height = 5, width = 15)
+```
+
 
 **Comparing estimates of groundfish biomass, abundance, and diversity from different optical sampling methods** 
 
