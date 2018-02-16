@@ -363,9 +363,9 @@ tx.sub <- n_distinct(nav.sub$dive_name)
 dist.sub <- sum(nav.sub$dist)/1000
 area.sub <- dist.sub * 2.5
 
-nav.summ.sub <- nav.sub %>% 
-  group_by(site) %>% 
-  summarize(transects = n_distinct(dive_name))
+# nav.summ.sub <- nav.sub %>% 
+#   group_by(site) %>% 
+#   summarize(transects = n_distinct(dive_name))
 ```
 
 ```{r MapNav,eval=F}
