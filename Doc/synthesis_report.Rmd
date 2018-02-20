@@ -1,6 +1,4 @@
 ---
-bibliography: bib/ast_bib.bib
-csl: csl/ices-journal-of-marine-science.csl
 header-includes: \usepackage{array} \usepackage{booktabs} \usepackage{calc} \usepackage{caption}
   \usepackage{colortbl} \usepackage{float} \usepackage{graphicx} \usepackage{hhline} \usepackage{isomath}
   \usepackage{longtable} \usepackage{multirow} \usepackage{pdflscape} \usepackage{siunitx} \usepackage[table]{xcolor} 
@@ -12,9 +10,11 @@ output:
   html_document: default
   word_document:
     reference_docx: template/report_template_Rmarkdown.docx
+bibliography: bib/ast_bib.bib
+csl: csl/ices-journal-of-marine-science.csl
 ---  
 
-```{r LoadLibraries, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+```{r ConfigureDocument, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
 # List packages required to run the script
 pkgs <- c("sf","tidyverse","knitr","swfscMisc","lubridate","here","boot",
           "maps","readxl","maptools","png","mapdata","flextable",
@@ -73,6 +73,13 @@ sub.source  <- "Access" # Or DSN if getting from database directly
 save.figs   <- T # Draw plots and maps, or use existing
 do.boot     <- F # Conduct bootstrap resampling
 get.sf      <- F # Download costline data
+
+# Set plotting preferences
+rov.colour = "yellow"
+sub.colour = "blue"
+
+fig.width = 5
+fig.height = 7
 ```  
 
 ```{r ImportSurveyData}
@@ -579,10 +586,7 @@ boot.summ.sample.all <- bind_rows(boot.summ.sample.rov,boot.summ.sample.sub) %>%
 main.spp <- c("Sebastes paucispinis", "Sebastes levis","Sebastes chlorostictus","Ophiodon elongatus",
               "Sebastes crocotulus","Sebastes rufus")
 
-fig.width = 5
-fig.height = 7
-
-ggplot(boot.summ.sample.all, aes(factor(sciName),platform)) + geom_raster(aes(fill = biom.cv)) + 
+raster.biomass.all <- ggplot(boot.summ.sample.all, aes(factor(sciName),platform)) + geom_raster(aes(fill = biom.cv)) + 
   scale_fill_gradientn(name = "CV (%)\n", colours = c("green","lightgreen","yellow","orange","red"), limits = c(0,100)) +
   geom_text(aes(label = prettyNum(round(biom.mean,0), big.mark = ",")),size = 2.5) +
   scale_x_discrete(expand = c(0, 0)) +
@@ -593,9 +597,9 @@ ggplot(boot.summ.sample.all, aes(factor(sciName),platform)) + geom_raster(aes(fi
   theme(axis.text.y = element_text(face = "italic")) +
   ggtitle("Biomass (kg)")
 
-ggsave(here("Figs/fig_raster_biomass_all.png"),height = fig.height, width = fig.width)
+ggsave(raster.biomass.all, filename = here("Figs/fig_raster_biomass_all.png"),height = fig.height, width = fig.width)
 
-ggplot(filter(boot.summ.sample.all,sciName %in% main.spp), aes(factor(sciName),platform)) + geom_raster(aes(fill = biom.cv)) + 
+raster.biomass.select <- ggplot(filter(boot.summ.sample.all,sciName %in% main.spp), aes(factor(sciName),platform)) + geom_raster(aes(fill = biom.cv)) + 
   scale_fill_gradientn(name = "CV (%)\n", colours = c("green","lightgreen","yellow","orange","red"), limits = c(0,100)) +
   geom_text(aes(label = prettyNum(round(biom.mean,0), big.mark = ",")),size = 3) +  
   scale_x_discrete(expand = c(0, 0)) +
@@ -606,9 +610,9 @@ ggplot(filter(boot.summ.sample.all,sciName %in% main.spp), aes(factor(sciName),p
   theme(axis.text.y = element_text(face = "italic")) +
   ggtitle("Biomass (kg)")
 
-ggsave(here("Figs/fig_raster_biomass_select.png"),height = 5, width = 5)
+ggsave(raster.biomass.select, filename = here("Figs/fig_raster_biomass_select.png"),height = 5, width = 5)
 
-ggplot(boot.summ.sample.all, aes(factor(sciName),platform)) + geom_raster(aes(fill = abund.cv)) + 
+raster.abundance.all <- ggplot(boot.summ.sample.all, aes(factor(sciName),platform)) + geom_raster(aes(fill = abund.cv)) + 
   scale_fill_gradientn(name = "CV (%)\n", colours = c("green","lightgreen","yellow","orange","red"), limits = c(0,100)) +
   geom_text(aes(label = prettyNum(round(abund.mean,0), big.mark = ",")),size = 2.5) +
   scale_x_discrete(expand = c(0, 0)) +
@@ -619,9 +623,9 @@ ggplot(boot.summ.sample.all, aes(factor(sciName),platform)) + geom_raster(aes(fi
   theme(axis.text.y = element_text(face = "italic")) +
   ggtitle("Abundance")
 
-ggsave(here("Figs/fig_raster_abundance_all.png"),height = fig.height, width = fig.width)
+ggsave(raster.abundance.all, filename = here("Figs/fig_raster_abundance_all.png"),height = fig.height, width = fig.width)
 
-ggplot(filter(boot.summ.sample.all,sciName %in% main.spp), aes(factor(sciName),platform)) + geom_raster(aes(fill = abund.cv)) + 
+raster.abundance.select <- ggplot(filter(boot.summ.sample.all,sciName %in% main.spp), aes(factor(sciName),platform)) + geom_raster(aes(fill = abund.cv)) + 
   scale_fill_gradientn(name = "CV (%)\n", colours = c("green","lightgreen","yellow","orange","red"), limits = c(0,100)) +
   geom_text(aes(label = prettyNum(round(abund.mean,0), big.mark = ",")),size = 3) +
   scale_x_discrete(expand = c(0, 0)) +
@@ -632,7 +636,7 @@ ggplot(filter(boot.summ.sample.all,sciName %in% main.spp), aes(factor(sciName),p
   theme(axis.text.y = element_text(face = "italic")) +
   ggtitle("Abundance")
 
-ggsave(here("Figs/fig_raster_abundance_select.png"),height = 5, width = 5)
+ggsave(raster.abundance.select, filename = here("Figs/fig_raster_abundance_select.png"),height = 5, width = 5)
 ```
 
 ```{r ALL_bootstrap}
@@ -640,12 +644,9 @@ boot.samples.all <- bind_rows(boot.samples.rov, boot.samples.sub) %>%
   ungroup() %>% 
   mutate(sciName = str_replace(sciName,"Sebastes miniatus","Sebastes crocotulus"))
 
-rov.colour = "yellow"
-sub.colour = "blue"
-
-ggplot(boot.samples.all, aes(boot.abund)) + geom_histogram(aes(fill = platform), alpha = 0.5) +
-  facet_wrap(~sciName, scales = "free") + 
-  scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() 
+# ggplot(boot.samples.all, aes(boot.abund)) + geom_histogram(aes(fill = platform), alpha = 0.5) +
+#   facet_wrap(~sciName, scales = "free") + 
+#   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() 
 
 # Footprint data
 boot.abund.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% main.spp & site == "The Footprint"), aes(boot.abund)) + 
@@ -944,22 +945,21 @@ if (doc.type == "docx") {
   lw_table %>% 
     regulartable() %>% 
     italic(j = 1) %>%
-    align(align = "center",part = "header") %>%
+    align(align = "center", part = "header") %>%
     autofit()
 } else {
   lw_table %>% 
     rename(
       "$L_\\mathrm{max}$" = L_max,
       "$a$" = a,
-      "$b$" = b) %>% 
+      "$b$" = b) %>%
     kable(format = knitr.format,booktabs = T, escape = F,
           align = c("l","l","r","r","r","l","l","l"),
           digits = c(0,0,4,4,1,0,0,0)) %>% 
     kable_styling(latex_options = c("striped","condensed",
                                     "repeat_header","scale_down"),
                   position = "center") %>%
-    column_spec(1, italic = T) %>% 
-    row_spec(0, align = c("c"))
+    column_spec(1, italic = T)
 }
 ```  
 
