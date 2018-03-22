@@ -21,11 +21,11 @@ pkgs <- c("sf","tidyverse","knitr","swfscMisc","lubridate","here","boot",
           "cowplot","devtools","kableExtra","RODBC","pander","DBI",
           "rnaturalearth","odbc")
 # Install and load all CRAN packages provided from a character vector
-load_pkgs = function(pkgs){
+load_pkgs = function(pkgs) {
   new_pkgs = pkgs[!(pkgs %in% installed.packages()[ ,'Package'])]
-  if (length(new_pkgs) > 0) install.packages(new_pkgs)
+  if (length(new_pkgs) > 0) install.packages(new_pkgs,repos = "http://cran.cnr.berkeley.edu/")
   invisible(lapply(pkgs,function(x)
-    suppressPackageStartupMessages(library(x,character.only = TRUE))))
+    suppressPackageStartupMessages(library(x,character.only = T))))
 }
 # Load packages
 load_pkgs(pkgs)
@@ -36,13 +36,6 @@ if ("surveyR" %in% installed.packages()[ ,'Package'] == F) {
 }
 # Load surveyR
 library(surveyR)
-
-# Install and load slipper package from github
-if ("slipper" %in% installed.packages()[ ,'Package'] == F) {
-  install_github("jtleek/slipper")
-}
-# Load patchwork
-library(slipper)
 
 # determines method of table generation (whether kable or pander) for best formatting
 doc.type <- knitr::opts_knit$get('rmarkdown.pandoc.to')
@@ -62,11 +55,6 @@ if (doc.type == "latex") {
   knitr.format <- "html" 
 }
 
-# # global pander options
-# panderOptions('table.style','rmarkdown'); panderOptions('table.split.table', Inf);
-# panderOptions('digits', 6); panderOptions('round', 6); panderOptions('keep.trailing.zeros', TRUE);
-# panderOptions('missing', "")
-
 # processing instructions (TRUE/FALSE)
 import.data <- F # Download data from SQL database
 sub.source  <- "Access" # Or DSN if getting from database directly
@@ -77,7 +65,9 @@ get.sf      <- F # Download costline data
 # Set plotting preferences
 rov.colour = "yellow"
 sub.colour = "blue"
+auv.colour = "green"
 
+# Set figure dimensions
 fig.width = 5
 fig.height = 7
 ```  
@@ -782,30 +772,19 @@ Non-lethal and non-destructive survey methods, whether optical, acoustical, or s
 
 # Methods  
 ## Survey area  
-Underwater surveys of demersal fishes and their seabed habitats were conducted on two rocky seamounts - The Footprint and Piggy Bank - off southern California (**Figure 1**). The study site is located inside the State and Federal Footprint Marine Reserves, offshore of Santa Cruz Island, inside the Channel Islands National Marine Sanctuary. Piggy Bank is about 30 km^2^ in area, ranging in depth from 275 to 900 m; The Footprint is about 10 km^2^ in area, ranging in depth from 80 to 500 m. High-resolution bathymetry and broad-scale seabed classification from multibeam echosounder backscatter data were available prior to our surveys (Dartnell et al. 2005). The survey area was stratified into 100-m depth strata down to 400 m. The total area of each stratum was estimated using using GIS (ArcMap version 9.3; Esri, Inc.) (**Table X?**) and used to estimate total biomass and abundance from estimates of fish density. Large areas of soft sediment in the northeast section of the study site were excluded from our sampling frame.  
+Underwater surveys of demersal fishes and their seabed habitats were conducted on two rocky seamounts - The Footprint and Piggy Bank - off southern California (**Figure 1**). The study site is located inside the State and Federal Footprint Marine Reserves, offshore of Santa Cruz Island, inside the Channel Islands National Marine Sanctuary. Piggy Bank is about 30 km^2^ in area, ranging in depth from 275 to 900 m; The Footprint is about 10 km^2^ in area, ranging in depth from 80 to 500 m. High-resolution bathymetry and broad-scale seabed classification from multibeam echosounder backscatter data were available prior to our surveys (Dartnell et al. 2005). The survey area was stratified into 100-m depth strata down to 400 m. The total area of each stratum was estimated using using GIS (ArcMap version 9.3; Esri, Inc.) and used to estimate total biomass and abundance from estimates of fish density. Large areas of soft sediment in the northeast section of the study site were excluded from our sampling frame.  
 
 ## Survey design  
-Visual surveys were conducted using a SUB (_Dual Deepworker_, Nuytco) deployed from the F/V _Velero IV_ between 21 and 30 September 2011; using a remotely operated vehicle (ROV, _Phantom DS4_, Deep Ocean Exploration and Research) deployed from the F/V _Outer Limits_ during four legs between 21 September and 8 December 2011 (Leg 1: 21-22 September; Leg 2: 4 October; Leg 3: 12-13 October; and Leg 4: 4-8 December; and using an autonomous underwater vehicle (AUV, _Lucille_, SeaBED) between **21 and 30 September 2011 (check dates)** aboard the NOAA Vessel _Shearwater_. The sampling unit for the SUB and ROV was a transect and the sampling unit for the AUV was a transect grid (see below).
+Visual surveys were conducted during daylight hours (~06:30 to 17:00 h PST) using a human-occupied submersible (SUB, _Dual Deepworker_, Nuytco) deployed from the F/V _Velero IV_ between 21 and 30 September 2011; using a remotely operated vehicle (ROV, _Phantom DS4_, Deep Ocean Exploration and Research) deployed from the F/V _Outer Limits_ during four legs between 21 September and 8 December 2011 (Leg 1: 21-22 September; Leg 2: 4 October; Leg 3: 12-13 October; and Leg 4: 4-8 December; and using an autonomous underwater vehicle (AUV, _Lucille_, SeaBED) between **21 and 30 September 2011 (check dates)** aboard the NOAA Vessel _Shearwater_. 
 
-Transects were planned to occur in only one depth stratum. Some transects spanned multiple depths strata and were split into multiple transects by 100-m-depth bins. To reduce potential variability arising from very short transects, only those transects with lengths greater than 200 m were included in the analysis. Transect lengths were calculated from the speed of the ROV, and transect area was estimated every 2-s from the camera height, tilt angle, and horizontal viewing angle (Stierhoff et al., 2016).  
-
-Each SUB dive included multiple, randomly located, 15-min-long transects within each stratum (**Figure X**). The number of transects per stratum was based on optimal sample variances from past visual surveys in the study area (**Yoklavich, unpublished data**), the area of each depth stratum (**Table 1**), and the amount of time available for the entire survey. A bootstrap analysis of coefficients of variation in density of various fish species and species
-richness estimated from similar SUB transects conducted in 2005 on Footprint seamount at depths < 200 m. We concluded that 15 transects produced optimal sample variances for the area within the 100-200-m stratum at Footprint, and applied that ratio (15 transects/1.23 km^^) to determine the number of transects to be conducted within the other depth strata in the study area. We increased the number of transects within the <100 meter stratum based on relatively high density of fishes and species richness at that depth in the earlier survey of this area. Using ArcMap 9.3, the appropriate number of spatially random points were generated within each depth stratum to locate transects.  
-
-For the AUV survey, a 250 x 250 m grid was superimposed on the survey area, then each cell was assigned to one of three focal areas: the top of Piggy Bank, the top of The Footprint and the deeper flank around The Footprint (**Figure 2**). Cells to be sampled were then selected randomly from each area. Within each cell, the AUV was programmed to survey pattern that covered the majority of the cell at a nominal height of **X m** above the seabed. The survey pattern consisted of five 200-m long transects connected by four 25-m long lines for a total transect distance of 1.1 km in each cell sampled. If randomly selected cells were close in proximiry, multiple cells could be sampled during one deployment. One to four cells were sampled per day and deployment duration varied from 45 to 88 min (mean = 74 min). Digital still images were collected every 10 s throughout each transect (see Survey Vehicles below).  
+The densities of target species were estimated by each vehicle using strip transect sampling. For the SUB and ROV surveys, each bank was stratified into four 100-m depth bins between 0 and 400 m. Within each depth stratum, transect locations were randomly selected and oriented approximately parallel to isobaths to avoid sampling across multiple strata. Transects were either of fixed duration (~15 min, SUB) or distance (~500 m, ROV). On occasion, ROV transects spanned multiple depth strata, which were post-stratified into multiple transects; only transects greater than 200 m-long were included in the analysis. Additional SUB transects were allocated to the 0-100 m depth strata since earlier studies indicated relatively higher groundfish diversity, species richness, or both at those depths. For the AUV survey, a 250 x 250 m grid was superimposed on the survey area, then each grid cell was assigned to one of three regions: the top of Piggy Bank, the top of The Footprint and the deeper flank around The Footprint (**add strata to Figure X**). Within each region, cells were randomly selected and sampled following a pattern of five 200-m long transects connected by four 25-m long (total transect distance of 1.1 km) at a height of approximately 3.5-4 m above the seabed.  
 
 ## Survey vehicles  
-All visual transect surveys were conducted during daylight hours (~06:30 to 17:00 h PST) and spanned a variety of seabed types, from flat-sandy and mud seabeds to steeply sloping, high-relief rocky seabeds.  
-
 ### Human-occupied submersible  
-A pilot operated the SUB while an experienced observer onboard identified all fish species and estimated their total length ($TL$) to the nearest 5-cm **[check this]**. Each transect was documented with two external high-definition (HD), three-color video cameras mounted at 45^$\circ$^ below horizontal on the starboard side of the SUB: one positioned in the same direction and field of view as the observer and the other camera located below the observer's field of view to record fishes in the area closest to the SUB that may not have been seen by the observer. The time on the video cameras were synchronized to **the GPS clock**. The observer's observations were logged in real-time on the audio track of the video recordings **and later reviewed and verified(?)**.  
-
-The location of the SUB above the seabed was estimated using a USBL (TrackLink **5000HA (check this)**, LinkQuest) and dGPS. All data were time-stamped and logged synchronously every 3-s using integrated navigation software (WinFrog, Fugro Pelagos). The positioning system was linked to a GIS to track the SUB in real-time and so that a navigator aboard the support vessel could guide its path; the pilot and observer inside the SUB did not influence the direction of travel. During a transect, we tried to maintain a constant distance within 2 m of the seafloor and a constant speed between 0.5 and 1.0 kn, depending on substratum type (i.e., generally slower speed in complex habitats). Those segments of a transect in which the seafloor was not clearly visible were excised and not considered as part of the 15-min sample. The observer estimated fish sizes using paired lasers spaced 20-cm apart on either side of the main survey video camera as a guide. The length of each transect was determined using a DVL (**using speed, or dead reckoning between x/y/z estimates**) and ring-laser gyrocompass (**Make, Model**) attached to the outside of the submersible. An average **[and SD/SE??]** transect width of `2.5` m was estimated by the scientific observer with the aid of a hand-held sonar, the submersibless sonar, and a crossing laser set **to intersect the parallel laser** at `3` m from the observer when the submersible was `1` m above the seabed. Temperature, salinity, depth, and dissolved oxygen were measured every **X** s using a CTD (SBE-19, Seabird) and oxygen sensor **(Make, Model)**.  
+A pilot operated the SUB while an experienced scientist identified all observed fishes and estimated their size. Video was recorded from two high-definition (HD; **720 or 1080 i/p**), three-color video cameras (**Make and Model, if known**) mounted at 45^$\circ$^ below horizontal on the starboard side of the SUB: one positioned in the same direction and field of view as the observer and the other camera located below the observer's field of view to record fishes in the area closest to the SUB that may not have been seen by the observer. Camera times were synchronized to the GPS clock; observations from the scientist were recorded on the audio track of the video recordings and later reviewed in the laboratory. The location of the SUB above the seabed was estimated using a USBL (TrackLink 5000HA, LinkQuest) and differential global positioning system (dGPS, **Make and Model, if known**) interfaced with a GIS, which was used by a navigator aboard the support vessel to guide the path of the SUB. The observer estimated fish sizes using paired lasers spaced 20-cm apart on either side of the main video camera for reference. The length of each transect was determined using a DVL (**using speed, or dead reckoning between x/y/z estimates**) and ring-laser gyrocompass (**Make and Model, if known**) attached to the outside of the submersible. An average transect width of **`2.5`** m **[and SD/SE??]** was estimated by the scientist using 1) a hand-held sonar, 2) the SUB's sonar, and 3) a crossing laser set to intersect the parallel laser at **3 m** from the observer when the submersible was **1 m** above the seabed. Temperature, salinity, depth, and dissolved oxygen (DO) were measured using a CTD (SBE-19, Seabird) and oxygen sensor **(Make and Model, if known)**. All data were time-stamped and logged synchronously every 3-s using integrated navigation software (WinFrog, Fugro Pelagos).  
 
 ### Remotely operated vehicle  
-The location of the ROV above the seabed was estimated using an ultra-short baseline (USBL) acoustic tracking system (TrackLink 5000HA, LinkQuest, Inc.) and differential global positioning system (dGPS, CSI Wireless dGPS MAX). The length of each transect was estimated from the ROV speed that was measured using a Doppler velocity log (DVL, Workhorse Navigator, Teledyne RD Instruments). Water-column and near-bottom water quality parameters [e.g., temperature, salinity, dissolved oxygen (DO) concentration and DO saturation (%)] were measured during each transect using a CTD (Citadel CTD-ES, Teledyne RD Instruments) and optode (Model 3930, Aanderaa, Inc.). All data were time-stamped and logged synchronously using WinFrog integrated navigation software (Fugro Pelagos, Inc.). Reference lasers (spaced 20 and 60 cm-apart) were used to estimate fish lengths and transect widths (see Effort analysis below). All video footage was recorded to digital-video tape (DVCAM) and later used for enumerating fishes and characterizing the seabed. To aid in the identification and measurement of fishes observed on the video tapes, and also for better characterizing seabed substrates, high-quality digital still images were collected haphazardly. 
-
-The location of transects during Leg 1 (**Figure X**, orange transects) were selected based on preliminary acoustic backscatter data collected by the SWFSC’s Advanced Survey Technology (AST) group between 13 and 14 September. Subsequent transects were selected at random (Legs 2-4, **Figure X**).  
+A pilot aboard the vessel operated the ROV along planned transect routes. Video was recorded from a single standard definition (**resolution**) color video camera (**Model**, Insite Pacific) and later used for enumerating fishes and describing seabed characteristics. High-resolution (3 megapixel) images were collected haphazardly using a digital still camera (Scorpio, Insite Pacific) and used to aid the identification and measurement of fishes observed in video recordings. The location of the ROV above the seabed was estimated using a USBL (TrackLink 5000HA, LinkQuest, Inc.) and dGPS (CSI Wireless dGPS MAX). The altitude and speed of the ROV was measured using a Doppler velocity log (DVL, Workhorse Navigator, Teledyne RD Instruments). Temperature, salinity, and DO were measured during each transect using a CTD (Citadel CTD-ES, Teledyne RD Instruments) and optode (Model 3930, Aanderaa, Inc.). All data were time-stamped and logged synchronously using integrated navigation software (Winfrog). Reference lasers spaced 20 and 60 cm-apart were used to estimate fish size.   
 
 ### Autonomous underwater vehicle  
 Stereo images of the seabed were collected every 10 s using a **calibrated?**, downward-facing stereo camera pair (5-megapixel, 12-bit dynamic range machine vision cameras; GigE, Prosilica) synced to a strobe (**[model important?]**); a third GigE camera was angled forward at and angle of 30^$\circ$^strobe synced with the cameras. The location of the AUV above the seabed was estimated using a USBL acoustic tracking system (TrackLink **1500/5000HA**, LinkQuest, Inc.) and dGPS (**Model, Manufacturer??**), and the depth was determined using a depth sensor (**Model?**, Paroscientific). Scientists communicated with the AUV using an acoustic modem (256008 acoustic micromodem, WHOI) at depth and a radio modem (Model FGR-115 RCRF, FreeWave) at the surface. Physical oceanographic measurements were made using an onboard CTD (Model 49 FastCat, Sea-Bird).
@@ -815,6 +794,8 @@ All target species observed in video recordings were identified, with the aid of
 
 ### SUB  
 Video transects and associated audio annotations made by the observer during each dive were reviewed following the survey. All observed fishes within 2 m of the seabed were identified to lowest possible taxon, counted, and measured (to nearest 5 cm).  
+
+During each transect, the SUB aimed to maintain a constant altitude of 2 m above the seabed and a constant speed between 0.5 and 1.0 kn depending on substratum type (i.e., generally slower speed in complex habitats). Transect segments during which the seabed was not clearly visible were removed from the analysis. 
 
 ### ROV
 For each observation, total length (_TL_; cm) was estimated to the nearest 10 cm (e.g., 0-10 cm, 10-20 cm, etc.) using the parallel lasers for reference. When fish were oriented normal to the camera lens and near the reference lasers, _TL_ was measured more precisely (i.e., nearest 1 cm) using image analysis package (ImageJ, National Institute of Health).  
