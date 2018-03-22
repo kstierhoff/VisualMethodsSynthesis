@@ -10,6 +10,9 @@ output:
   html_document: default
   word_document:
     reference_docx: template/report_template_Rmarkdown.docx
+    pandoc_args: [
+     "--filter", "yaml/pandoc_newpage_filter.R"
+     ]
 bibliography: bib/ast_bib.bib
 csl: csl/ices-journal-of-marine-science.csl
 ---  
@@ -17,7 +20,7 @@ csl: csl/ices-journal-of-marine-science.csl
 ```{r ConfigureDocument, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
 # List packages required to run the script
 pkgs <- c("sf","tidyverse","knitr","swfscMisc","lubridate","here","boot",
-          "maps","readxl","maptools","png","mapdata","flextable",
+          "maps","readxl","maptools","png","mapdata","flextable","knitr",
           "cowplot","devtools","kableExtra","RODBC","pander","DBI",
           "rnaturalearth","odbc")
 # Install and load all CRAN packages provided from a character vector
@@ -416,9 +419,10 @@ if (save.figs) {
 ```  
 
 ```{r ROV_bootstrap}
+# Bootstrap ROV abundance and biomass by strata
+B = 1000
+
 if (do.boot) {
-  # Bootstrap ROV abundance and biomass by strata
-  B = 1000
   # i = "Sebastes levis"
   # j = "The Footprint"
   # k = "(-200,-100]"
@@ -584,8 +588,11 @@ raster.biomass.all <- ggplot(boot.summ.sample.all, aes(factor(sciName),platform)
   coord_flip() + xlab("Species") + ylab("Vehicle") +
   facet_wrap(~site, nrow = 1) + 
   theme_bw() +
-  theme(axis.text.y = element_text(face = "italic")) +
-  ggtitle("Biomass (kg)")
+  theme(axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        strip.background.x = element_blank(),
+        strip.text.x = element_text(face = "bold")) +
+  ggtitle("Biomass")
 
 ggsave(raster.biomass.all, filename = here("Figs/fig_raster_biomass_all.png"),height = fig.height, width = fig.width)
 
@@ -597,8 +604,11 @@ raster.biomass.select <- ggplot(filter(boot.summ.sample.all,sciName %in% main.sp
   coord_flip() + xlab("Species") + ylab("Vehicle") +
   facet_wrap(~site, nrow = 1) + 
   theme_bw() +
-  theme(axis.text.y = element_text(face = "italic")) +
-  ggtitle("Biomass (kg)")
+  theme(axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        strip.background.x = element_blank(),
+        strip.text.x = element_text(face = "bold")) +
+  ggtitle("Biomass")
 
 ggsave(raster.biomass.select, filename = here("Figs/fig_raster_biomass_select.png"),height = 5, width = 5)
 
@@ -610,7 +620,10 @@ raster.abundance.all <- ggplot(boot.summ.sample.all, aes(factor(sciName),platfor
   coord_flip() + xlab("Species") + ylab("Vehicle") +
   facet_wrap(~site, nrow = 1) + 
   theme_bw() +
-  theme(axis.text.y = element_text(face = "italic")) +
+  theme(axis.text.y = element_text(face = "italic"),
+        strip.background.x = element_blank(),
+        strip.text.x = element_text(face = "bold"),
+        legend.position = "none") +
   ggtitle("Abundance")
 
 ggsave(raster.abundance.all, filename = here("Figs/fig_raster_abundance_all.png"),height = fig.height, width = fig.width)
@@ -623,10 +636,19 @@ raster.abundance.select <- ggplot(filter(boot.summ.sample.all,sciName %in% main.
   coord_flip() + xlab("Species") + ylab("Vehicle") +
   facet_wrap(~site, nrow = 1) + 
   theme_bw() +
-  theme(axis.text.y = element_text(face = "italic")) +
+  theme(axis.text.y = element_text(face = "italic"),
+        strip.background.x = element_blank(),
+        strip.text.x = element_text(face = "bold"),
+        legend.position = "none") +
   ggtitle("Abundance")
 
 ggsave(raster.abundance.select, filename = here("Figs/fig_raster_abundance_select.png"),height = 5, width = 5)
+
+raster.both.all <- plot_grid(raster.abundance.all, raster.biomass.all, nrow = 1)
+ggsave(raster.both.all, filename = here("Figs/fig_raster_both_all.png"),height = 8, width = 10)
+
+raster.both.select <- plot_grid(raster.abundance.select, raster.biomass.select, nrow = 1)
+ggsave(raster.both.select, filename = here("Figs/fig_raster_both_select.png"),height = 4, width = 10)
 ```
 
 ```{r ALL_bootstrap}
@@ -650,7 +672,8 @@ boot.abund.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% main.spp & 
   facet_wrap(~sciName, scales = "free", nrow = 1) + 
   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
-  theme(strip.text.x = element_text(face = "italic"),
+  theme(strip.text.x = element_text(face = "bold.italic"),
+        strip.background.x = element_blank(),
         axis.text.x = element_blank(),
         axis.text.y = element_blank()) +
   xlab("Abundance") + ylab("Density")
@@ -668,7 +691,8 @@ boot.biom.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% main.spp & s
   facet_wrap(~sciName, scales = "free", nrow = 1) + 
   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
-  theme(strip.text.x = element_text(face = "italic"),
+  theme(strip.text.x = element_text(face = "bold.italic"),
+        strip.background.x = element_blank(),
         axis.text.x = element_blank(),
         axis.text.y = element_blank()) +
   xlab("Biomass") + ylab("Density")
@@ -691,7 +715,8 @@ boot.abund.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% main.spp & 
   facet_wrap(~sciName, scales = "free", nrow = 1) + 
   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
-  theme(strip.text.x = element_text(face = "italic"),
+  theme(strip.text.x = element_text(face = "bold.italic"),
+        strip.background.x = element_blank(),
         axis.text.x = element_blank(),
         axis.text.y = element_blank()) +
   xlab("Abundance") + ylab("Density")
@@ -709,7 +734,8 @@ boot.biom.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% main.spp & s
   facet_wrap(~sciName, scales = "free", nrow = 1) + 
   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
-  theme(strip.text.x = element_text(face = "italic"),
+  theme(strip.text.x = element_text(face = "bold.italic"),
+        strip.background.x = element_blank(),
         axis.text.x = element_blank(),
         axis.text.y = element_blank()) +
   xlab("Biomass") + ylab("Density")
@@ -722,19 +748,19 @@ ggsave(boot.dens.plot.all, filename = here("Figs/fig_density_both_piggy.png"), h
 ```
 
 
-**Comparing estimates of groundfish biomass, abundance, and diversity from different optical sampling methods** 
+**Estimates of groundfish biomass, abundance, and diversity using different optical sampling tools and methods** 
 
-Kevin L. Stierhoff^1^, Mary M. Yoklavich^2^, and M. Elizabeth Clarke^3^
+Kevin L. Stierhoff^1^, Mary M. Yoklavich^2^, and M. Elizabeth Clarke^3^, Jeff Anderson^4^, Erica L. Fruh^3^, Thomas E. Laidig^2^, Scott A. Mau^1^, David W. Murfin^1^, Abigail Powell^3^, Jeremy C. Taylor^4^, Diana L. Watters^2^  
 
-**Others:** Thomas E. Laidig^2^, Diana L. Watters^2^, Erica L. Fruh^3^, Jeff Anderson^4^, Jeremy C. Taylor^4^  
+**Order of authorship (presently): PIs, followed by technical staff in ABC order. Please suggest additions, subtractions, and/or changes to the order.**  
 
 Draft date: `r format(Sys.time(), "%d %B %Y")`'
 
 ^1^Fisheries Resources Division  
 Southwest Fisheries Science Center  
 NOAA-National Marine Fisheries Service  
-110 McAllister Way  
-Santa Cruz, CA 95060, USA
+8901 La Jolla Shores Drive
+La Jolla, CA 92037, USA
 
 ^2^Fisheries Ecology Division  
 Southwest Fisheries Science Center  
@@ -764,58 +790,42 @@ TBD
 
 # Introduction  
 
-Many managed groundfish stocks on the U.S. west coast inhabit high-relief rocky areas that are inaccessible to traditional net-based survey methods (e.g., swept-area benthic trawls). Several species, such as cowcod (_Sebastes levis_) and yelloweye rockfish (_S. ruberrimus_), are strongly associated with these untrawlable habitats, have populations at various levels of depletion, and occupy habitats that have incurred substantial impacts from mobile fishing gear **[Did I get this correct??]** (Love and Yoklavich 2006; Yoklavich et al. 2007). Since much of the continental shelf and upper slope are closed to groundfishing, effective monitoring tools are required for species living in these untrawlable habitats.  
+Many managed groundfish stocks on the U.S. west coast inhabit high-relief rocky areas that are inaccessible to traditional net-based survey methods (e.g., swept-area benthic trawls). Several species, such as cowcod (_Sebastes levis_) and yelloweye rockfish (_S. ruberrimus_), are strongly associated with these untrawlable habitats, have populations at various levels of depletion, and occupy habitats that have incurred substantial impacts from mobile fishing gear [@Love2006a; @Yoklavich2007]. Since much of the continental shelf and upper slope are closed to fishing, effective, non-lethal, and non-destructive fishery-independent monitoring tools, whether optical, acoustical, or some combination of both, are required to assess populations of depleted or vulnerable groundfish species living in these untrawlable habitats while minimizing impacts on their habitats. 
 
-Non-lethal and non-destructive survey methods, whether optical, acoustical, or some combination of both, are needed to assess these vulnerable species while minimizing impacts on the fishes and their habitat. To that end, this study compared the results from visual transect surveys conducted in untrawlable habitat using a human-occupied submersible (SUB), an autonomous underwater vehicle (AUV), and a remotely operated vehicle (ROV). Specifically, each survey method was used to (1) identify, count, and estimate the sizes of rockfishes (_Sebastes_ spp.; both common and rare, large- and small-bodied, and semi-pelagic and highly demersal), lingcod (_Ophiodon elongatus_), thornyheads (_Sebastolobus_ sp.), and Pacific hake (_Merluccius productus_); (2) estimate the density, abundance, and biomass (and associated precision) for these taxa; and (3) estimate diversity within a prescribed study area.  
+**[MORE]**
 
-**More work will be spent on the Introduction at the end.**
+The goal of this study was to compare population estimates of ecologically and commercially important groundfishes in the southern CA measured using various optical survey tools. Specifically, a SUB, ROV, and AUV was used to: 1) identify, count, and measure rockfishes (_Sebastes_ spp.; both common and rare, large- and small-bodied, and semi-pelagic and highly demersal), lingcod (_Ophiodon elongatus_), thornyheads (_Sebastolobus_ sp.), and Pacific hake (_Merluccius productus_); 2) estimate the density, abundance, and biomass (and associated precision) for these taxa; and 3) estimate diversity within a prescribed study area. **[MORE]**  
 
 # Methods  
 ## Survey area  
 Underwater surveys of demersal fishes and their seabed habitats were conducted on two rocky seamounts - The Footprint and Piggy Bank - off southern California (**Figure 1**). The study site is located inside the State and Federal Footprint Marine Reserves, offshore of Santa Cruz Island, inside the Channel Islands National Marine Sanctuary. Piggy Bank is about 30 km^2^ in area, ranging in depth from 275 to 900 m; The Footprint is about 10 km^2^ in area, ranging in depth from 80 to 500 m. High-resolution bathymetry and broad-scale seabed classification from multibeam echosounder backscatter data were available prior to our surveys (Dartnell et al. 2005). The survey area was stratified into 100-m depth strata down to 400 m. The total area of each stratum was estimated using using GIS (ArcMap version 9.3; Esri, Inc.) and used to estimate total biomass and abundance from estimates of fish density. Large areas of soft sediment in the northeast section of the study site were excluded from our sampling frame.  
 
 ## Survey design  
-Visual surveys were conducted during daylight hours (~06:30 to 17:00 h PST) using a human-occupied submersible (SUB, _Dual Deepworker_, Nuytco) deployed from the F/V _Velero IV_ between 21 and 30 September 2011; using a remotely operated vehicle (ROV, _Phantom DS4_, Deep Ocean Exploration and Research) deployed from the F/V _Outer Limits_ during four legs between 21 September and 8 December 2011 (Leg 1: 21-22 September; Leg 2: 4 October; Leg 3: 12-13 October; and Leg 4: 4-8 December; and using an autonomous underwater vehicle (AUV, _Lucille_, SeaBED) between **21 and 30 September 2011 (check dates)** aboard the NOAA Vessel _Shearwater_. 
+Visual surveys were conducted during daylight hours (~06:30 to 17:00 h PST) using a human-occupied submersible (SUB; _Dual DeepWorker_, Nuytco) deployed from the F/V _Velero IV_ between 21 and 30 September 2011; using a remotely operated vehicle (ROV; _Phantom DS4_, Deep Ocean Exploration and Research) deployed from the F/V _Outer Limits_ during four legs between 21 September and 8 December 2011 (Leg 1: 21-22 September; Leg 2: 4 October; Leg 3: 12-13 October; and Leg 4: 4-8 December; and using an autonomous underwater vehicle (AUV; _Lucille_, SeaBED) between **21 and 30 September 2011 (check dates)** aboard the NOAA Vessel _Shearwater_. 
 
 The densities of target species were estimated by each vehicle using strip transect sampling. For the SUB and ROV surveys, each bank was stratified into four 100-m depth bins between 0 and 400 m. Within each depth stratum, transect locations were randomly selected and oriented approximately parallel to isobaths to avoid sampling across multiple strata. Transects were either of fixed duration (~15 min, SUB) or distance (~500 m, ROV). On occasion, ROV transects spanned multiple depth strata, which were post-stratified into multiple transects; only transects greater than 200 m-long were included in the analysis. Additional SUB transects were allocated to the 0-100 m depth strata since earlier studies indicated relatively higher groundfish diversity, species richness, or both at those depths. For the AUV survey, a 250 x 250 m grid was superimposed on the survey area, then each grid cell was assigned to one of three regions: the top of Piggy Bank, the top of The Footprint and the deeper flank around The Footprint (**add strata to Figure X**). Within each region, cells were randomly selected and sampled following a pattern of five 200-m long transects connected by four 25-m long (total transect distance of 1.1 km) at a height of approximately 3.5-4 m above the seabed.  
 
 ## Survey vehicles  
 ### Human-occupied submersible  
-A pilot operated the SUB while an experienced scientist identified all observed fishes and estimated their size. Video was recorded from two high-definition (HD; **720 or 1080 i/p**), three-color video cameras (**Make and Model, if known**) mounted at 45^$\circ$^ below horizontal on the starboard side of the SUB: one positioned in the same direction and field of view as the observer and the other camera located below the observer's field of view to record fishes in the area closest to the SUB that may not have been seen by the observer. Camera times were synchronized to the GPS clock; observations from the scientist were recorded on the audio track of the video recordings and later reviewed in the laboratory. The location of the SUB above the seabed was estimated using a USBL (TrackLink 5000HA, LinkQuest) and differential global positioning system (dGPS, **Make and Model, if known**) interfaced with a GIS, which was used by a navigator aboard the support vessel to guide the path of the SUB. The observer estimated fish sizes using paired lasers spaced 20-cm apart on either side of the main video camera for reference. The length of each transect was determined using a DVL (**using speed, or dead reckoning between x/y/z estimates**) and ring-laser gyrocompass (**Make and Model, if known**) attached to the outside of the submersible. An average transect width of **`2.5`** m **[and SD/SE??]** was estimated by the scientist using 1) a hand-held sonar, 2) the SUB's sonar, and 3) a crossing laser set to intersect the parallel laser at **3 m** from the observer when the submersible was **1 m** above the seabed. Temperature, salinity, depth, and dissolved oxygen (DO) were measured using a CTD (SBE-19, Seabird) and oxygen sensor **(Make and Model, if known)**. All data were time-stamped and logged synchronously every 3-s using integrated navigation software (WinFrog, Fugro Pelagos).  
+An on-board pilot operated the SUB along planned transects. The location of the SUB above the seabed was estimated using a USBL (TrackLink 5000HA; LinkQuest) and differential global positioning system (dGPS, **Make and Model, if known**) interfaced with a GIS, which was used by a navigator aboard the support vessel to guide the path of the SUB. An experienced scientist identified all observed fishes and estimated their size. Video was also recorded from two high-definition (HD; **720 or 1080 i/p**), three-color video cameras (**Make and Model, if known**) mounted at 45^$\circ$^ below horizontal on the starboard side of the SUB: one positioned in the same direction and field of view as the observer and the other camera located below the observer's field of view to record fishes in the area closest to the SUB that may not have been seen by the observer. Camera times were synchronized to the GPS clock; observations from the scientist were recorded on the audio track of the video recordings and later reviewed in the laboratory. Paired lasers spaced 20-cm apart on either side of the main video camera were used for reference to estimate fish size. A DVL (**using speed, or dead reckoning between x/y/z estimates**) and ring-laser gyrocompass (**Make and Model, if known**) attached to the outside of the submersible were used to estimate distance. Temperature, salinity, depth, and dissolved oxygen (DO) were measured using a CTD (SBE-19, Seabird) and oxygen sensor **(Make and Model, if known)**. All data were time-stamped and logged synchronously every 3-s using integrated navigation software (WinFrog, Fugro Pelagos).  
 
 ### Remotely operated vehicle  
-A pilot aboard the vessel operated the ROV along planned transect routes. Video was recorded from a single standard definition (**resolution**) color video camera (**Model**, Insite Pacific) and later used for enumerating fishes and describing seabed characteristics. High-resolution (3 megapixel) images were collected haphazardly using a digital still camera (Scorpio, Insite Pacific) and used to aid the identification and measurement of fishes observed in video recordings. The location of the ROV above the seabed was estimated using a USBL (TrackLink 5000HA, LinkQuest, Inc.) and dGPS (CSI Wireless dGPS MAX). The altitude and speed of the ROV was measured using a Doppler velocity log (DVL, Workhorse Navigator, Teledyne RD Instruments). Temperature, salinity, and DO were measured during each transect using a CTD (Citadel CTD-ES, Teledyne RD Instruments) and optode (Model 3930, Aanderaa, Inc.). All data were time-stamped and logged synchronously using integrated navigation software (Winfrog). Reference lasers spaced 20 and 60 cm-apart were used to estimate fish size.   
+A pilot aboard the vessel operated the ROV along planned transect routes. The location of the ROV above the seabed was estimated using a USBL (TrackLink 5000HA; LinkQuest) and dGPS (dGPS MAX, CSI Wireless). Video was recorded from a single standard definition (NTSC; 720 pixels x 470 lines of resolution) color video camera (Pegasus, Insite Pacific) mounted on a variable-pitch tray, and later used for enumerating fishes and describing seabed characteristics. High-resolution (3 megapixel) images were collected haphazardly using a digital still camera (Scorpio, Insite Pacific) mounted on the same tray and used to aid the identification and measurement of fishes observed in video recordings. The altitude and speed of the ROV was measured using a Doppler velocity log (DVL, 1200 kHz Workhorse Navigator, Teledyne RD Instruments) and used to estimate transect distance and width. Reference lasers spaced 20 and 60 cm-apart were used to estimate fish size. Temperature, salinity, and DO were measured during each transect using a CTD (Citadel CTD-ES, Teledyne RD Instruments) and optode (Model 3930, Aanderaa, Inc.). All data were time-stamped and logged synchronously using integrated navigation software (Winfrog, Fugro Pelagos). 
 
 ### Autonomous underwater vehicle  
-Stereo images of the seabed were collected every 10 s using a **calibrated?**, downward-facing stereo camera pair (5-megapixel, 12-bit dynamic range machine vision cameras; GigE, Prosilica) synced to a strobe (**[model important?]**); a third GigE camera was angled forward at and angle of 30^$\circ$^strobe synced with the cameras. The location of the AUV above the seabed was estimated using a USBL acoustic tracking system (TrackLink **1500/5000HA**, LinkQuest, Inc.) and dGPS (**Model, Manufacturer??**), and the depth was determined using a depth sensor (**Model?**, Paroscientific). Scientists communicated with the AUV using an acoustic modem (256008 acoustic micromodem, WHOI) at depth and a radio modem (Model FGR-115 RCRF, FreeWave) at the surface. Physical oceanographic measurements were made using an onboard CTD (Model 49 FastCat, Sea-Bird).
+The AUV navigated along its programmed route using a DVL (1200 kHz Workhorse Navigator; Teledyne RD Instruments), gyrocompass/inertial motion sensor (iXSea, OCTANS), and the GPS coordinates acquired while on the surface at the dive launch point. The actual location of the AUV above the seabed was estimated from the support vessel using a USBL acoustic tracking system (TrackLink 1500, LinkQuest, Inc.) and dGPS (**Model, Manufacturer??**). The depth of the AUV was determined using a pressure sensor (**Model?**, Paroscientific) and temperature, salinity, **other?** were measured using a CTD (Model 49 FastCat, Sea-Bird). Stereo images were collected every 10 s using a calibrated, downward-facing stereo camera pair (5-megapixel, 12-bit dynamic range GigE machine vision cameras; Prosilica) synced to a strobe (**[model important?]**); a third GigE camera was angled forward at and angle of 30^$\circ$^strobe synced with the downward-facing stereo cameras. All data were time-stamped and logged synchronously using **[list software, if used]**.
 
-## Visual analysis methods  
-All target species observed in video recordings were identified, with the aid of high-resolution still images when availble, to the lowest possible taxon and counted. When fishes could not be identified to species, they were identified to the genus (e.g., unidentified rockfish, _Sebastes_ spp.; or unidentified thornyhead, _Sebastolobus_ spp.) or subgenus level (e.g., rosy-group rockfish, _Sebastomus_).  
+## Visual analysis  
+All target species observed by each vehicle were identified to the lowest possible taxon, counted, and measured. The identification of fishes observed in SUB and ROV video was aided by audio annotations (SUB) and still images (ROV). The identification of fishes observed in the non-overlapping, color-corrected stereo images from the downward-facing AUV camera was aided by photos from the third angled camera. When fishes could not be identified to species species level, they were identified to the genus (e.g., unidentified rockfish, _Sebastes_ spp.; or unidentified thornyhead, _Sebastolobus_ spp.) or subgenus level (e.g., rosy-group rockfish, _Sebastomus_), if possible. Lengths of fishes observed by the AUV were estimated to 1 cm resolution using custom stereo image analysis software (_Sebastes_, NWFSC). Lengths of fishes observed from the SUB and ROV were estimated to the nearest 5- or 10-cm using calibrated parallel lasers for reference. When fish were oriented normal to the camera lens and near the reference lasers, length of fishes observed by the ROV were to the nearest 1 cm using image analysis software (ImageJ, National Institute of Health).
 
-### SUB  
-Video transects and associated audio annotations made by the observer during each dive were reviewed following the survey. All observed fishes within 2 m of the seabed were identified to lowest possible taxon, counted, and measured (to nearest 5 cm).  
-
-During each transect, the SUB aimed to maintain a constant altitude of 2 m above the seabed and a constant speed between 0.5 and 1.0 kn depending on substratum type (i.e., generally slower speed in complex habitats). Transect segments during which the seabed was not clearly visible were removed from the analysis. 
-
-### ROV
-For each observation, total length (_TL_; cm) was estimated to the nearest 10 cm (e.g., 0-10 cm, 10-20 cm, etc.) using the parallel lasers for reference. When fish were oriented normal to the camera lens and near the reference lasers, _TL_ was measured more precisely (i.e., nearest 1 cm) using image analysis package (ImageJ, National Institute of Health).  
+## Sampling effort (distance and area)
+The abundance and biomass of observed fishes was calculated using the area of each transect. For the SUB, transect distance was estimated every **3 s** using **speed/distance** measured by the **DVL/gyrocompass**; transect width was estimated **every X interval** by the on-board scientist using the combination of: 1) a hand-held sonar, 2) the SUB's sonar **[What is this? Was it used?]**, and 3) a crossing laser set to intersect the parallel laser at **3 m** from the observer when the submersible was **1 m** above the seabed; and transect area was estimated as the summed product of transect distance and width estimates. For the ROV, transect distance was estimated from ROV speed, transect width was estimated from the ROV altitude and the optical properties of the video cameras, and transect area was estimated as the summed product of distance and transect width estimates measured every 2-s [@Stierhoff2016]. For the AUV, transect area was estimated **a)** as the sum of the area of non-overlapping stereo image pairs estimated using custom software (_Sebastes_, NWFSC) or **b)** altitude off the bottom and the specified camera field of view **(Please choose which method)**. Each vehicle aimed to survey the planned transects at a constant speed and altitude above the seabed. Transect segments during which the seabed was not clearly visible were removed from the analysis.  
 
 ## Characterization of seabed type
-**[Not sure if we'll keep this section, but I've inserted text here in case.]**  
-### SUB  
-Seafloor substrate was classified using in order of decreasing particle size and vertical relief (as described in Greene et al. 1999): rock (R), boulder (B), cobble (C), and mud (M). A two-character code was used to quantify patches of uniform substratum type along each transect (as described in Yoklavich et al., 2000). The primary character in the code represented the substratum type that accounted for at least 50% of the patch, and the secondary character represented the substratum type accounting for at least 20% of the patch (e.g., CM represented a patch of at least 50% cobbles and at least 20% mud). The area of each substratum patch along a transect was estimated as the product of the transect width and the length of the patch.  
-
-### ROV  
-Primary and secondary geologic seabed characteristics were described at the beginning of the transect, at the time of each fish observation, and also at any transition between different seabed types, allowing for the description of associations between each species and different seabed types and also the estimation of area searched within each seabed type. Both the primary (>50% of the seabed within the strip area) and secondary (20-50% of the seabed within the strip area) seabed characteristics were described. Seabed classifications generally followed the classification scheme of Greene et al. (1999),
-and were based on particle size: mud (clay to silt; <0.06 mm), sand (0.06-2 mm), pebble (2-64 mm), cobble (64-256 mm), boulder (0.25-3 m), low-complexity (<0.25 m pavement) reef, and highcomplexity (>0.25 m) reef. The term “complexity” refers to the presence and the size of cracks and
-crevices in the seabed that may provide refuge to rockfishes. Based on the size and shape of these features, low-complexity and high-complexity reef probably serve the same ecological function as sand/pebble and cobble/boulder, respectively.  
-
-### AUV
-Seafloor habitats in each photograph were categorized using a two-character code (**Table X**) The first character signified the primary habitat type that covered greater than 50% of the field of view, while the second character defined the secondary habitat type covering between 20% and 50%.  If the primary habitat coverage exceeded 80%, that letter was denoted twice (e.g., CC).
+Primary and secondary geologic seabed characteristics were described at the beginning of the transect, at the time of each fish observation, and also at any transition between different seabed types, allowing for the description of associations between each species and different seabed types and also the estimation of area searched within each seabed type. Both the primary (>50% of the seabed within the strip area) and secondary (20-50% of the seabed within the strip area) seabed characteristics were described. Seabed classifications generally followed the classification scheme of Greene et al. [-@Greene1999], and were based on particle size: mud (clay to silt; <0.06 mm), sand (0.06-2 mm), pebble (2-64 mm), cobble (64-256 mm), boulder (0.25-3 m), low-complexity (<0.25 m pavement) reef, and highcomplexity (>0.25 m) reef. The term "complexity" refers to the presence and the size of cracks and crevices in the seabed that may provide refuge to rockfishes. Based on the size and shape of these features, low-complexity and high-complexity reef probably serve the same ecological function as sand/pebble and cobble/boulder, respectively. The area of each substratum type in a transect was estimated as the product of the transect width and the distance between seabed types for the SUB and ROV, or as the total area of images containing similar seabed types for the AUV.  
 
 ## Estimation of abundance and biomass
-### ROV (and SUB?)
-**[Methods may be same for ROV and SUB]** The total abundance and biomass of each species was estimated within each stratum. Total abundance ($N$) in each transect was estimated using the strip transect method (Buckland et al. 2001) by multiplying the mean density of each species ($D$; **get correct symbol**) within a stratum by the total area ($A$) within that stratum (**Table X**). For each transect, density was calculated as: $D = n / a$, where $n$ is the number of individuals encountered and $a$ is the transect area. The total area of each depth stratum was estimated using ArcGIS (**Table 2**). The biomass ($B$) for each species was estimated from $TL$ as: $B = a * (TL)^b$, where $a$ and $b$ are the taken from published relationships between TL and mass (**Appendix/Table X**). For fishes assigned to 10-cm length bins, the midpoint of each size class was used to estimate biomass (e.g., 5 cm for the 0-10 cm class). Many species for which few or no voucher specimens are available (e.g., dwarf-red rockfish, _S. rufinanus_; rosethorn rockfish, _S. simulator_; and pygmy rockfish, _S. wilsoni_), coefficients for closely related species (as described by Hyde & Vetter 2007) were used. The relationship for vermilion rockfish (_S. miniatus_) was substituted for the newly described sunset rockfish (_S. crocotulus_; Hyde et al. 2008). Since many of the unidentified rockfishes were of the semi-pelagic, aggregating variety, coefficients for squarespot rockfishes (_S. hopkinsi_, the most common species with similar behavior and vertical distribution) were used. For unidentified rosy-group fishes (_Sebastomus_), coefficients for swordspine rockfish (_S. ensifer_, the most common _Sebastomus_ species observed) was used. Mean, CV of the mean, and 90%-quantile confidence intervals for abundance and biomass were estimated using a non-parametric bootstrap of 1,000 samples (Efron & Tibshirani 1993).  
+The total abundance and biomass of each species was estimated within each stratum. Total abundance ($N$) in each transect was estimated using the strip transect method (Buckland et al. 2001) by multiplying the mean density of each species ($D$; **get correct symbol**) within a stratum by the total area ($A$) within that stratum (**Table X**). For each transect, density was calculated as: $D = n / a$, where $n$ is the number of individuals encountered and $a$ is the transect area. The total area of each depth stratum was estimated using ArcGIS (**Table 2**). The biomass ($B$) for each species was estimated from $TL$ as: $B = a * (TL)^b$, where $a$ and $b$ are the taken from published relationships between TL and mass (**Appendix/Table X**). For fishes assigned to 10-cm length bins, the midpoint of each size class was used to estimate biomass (e.g., 5 cm for the 0-10 cm class). Many species for which few or no voucher specimens are available (e.g., dwarf-red rockfish, _S. rufinanus_; rosethorn rockfish, _S. simulator_; and pygmy rockfish, _S. wilsoni_), coefficients for closely related species (as described by Hyde & Vetter 2007) were used. The relationship for vermilion rockfish (_S. miniatus_) was substituted for the newly described sunset rockfish (_S. crocotulus_; Hyde et al. 2008). Since many of the unidentified rockfishes were of the semi-pelagic, aggregating variety, coefficients for squarespot rockfishes (_S. hopkinsi_, the most common species with similar behavior and vertical distribution) were used. For unidentified rosy-group fishes (_Sebastomus_), coefficients for swordspine rockfish (_S. ensifer_, the most common _Sebastomus_ species observed) was used. Mean, CV of the mean, and 90%-quantile confidence intervals for abundance and biomass were estimated using a non-parametric bootstrap of 1,000 samples (Efron & Tibshirani 1993).  
 
 ### SUB  
 To estimate total biomass of species, we used the length-weight relationship
@@ -825,6 +835,15 @@ We substituted coefficients from closely related species for chameleon (_S. phil
 ### AUV  
 Digital still images were downloaded at the end of each mission and color-corrected. All non-overlapping images from the port, downward-facing camera were reviewed to identify and count all fish observed; images from the angled camera were used to aid in the identification of fishes observed. The area of each image was estimated using the measured altitude above the seabed and the specified camera field of view.  
 
+For each of the three focal areas (Footprint, Footprint flank, Piggy Bank) we estimated total abundance of each species and some taxonomic groups. To estimate abundance, first we calculated fish density per cell. The total number of fish observed in the AUV images for each cell were summed and then divided by the area surveyed in that cell.  Then we calculated the mean cell density and coefficients of variation (CV) for each of the focal areas.  In order to provide comparable results to the ROV surveys we also used a second method to calculate estimates of the mean, CV and 90% confidence intervals for abundance and biomass using a bootstrap of 1000 samples. In both cases, the mean fish densities were expanded to total abundance and variance for each focal area by multiplying mean cell density by the total areas of Footprint, Footprint flank and Piggy Bank.  The coefficient of variation was calculated as: 
+
+$$CV = \frac{\sigma}{\mu}$$
+
+where $\mu$ is the mean of the cell densities and $\sigma$ is the standard deviation of the cell means. Biomass was estimated from known length-weight relationships as:
+
+$$B = a * TL^b$$
+
+where _TL_ is the total length estimated from stereo image measurements. Species coefficients for _a_ and _b_ are listed in Appendix **XXX**.  
 ## Biodiversity estimates  
 ### SUB
 
@@ -843,8 +862,16 @@ A total of `69` transects were conducted between `95`-`400` m during `17` dives 
 ### ROV  
 A total of `r 37` transects were surveyed from ~`r 90` to `r 390` m. The majority of transects were conducted between the depths of 100 to 300 m on the Footprint, and from 200 to 300 m on Piggy Bank (**Table 2**, **Fig. 1**). The transect length ranged from ~`r 300` to `r 1300` m (mean = `r  "X"` m, SD = `r "SD"`), area ranged from (mean = `r  "X"` m^2^, SD = `r "SD"`), and duration ranged from ` r20` to `r 140` min (mean = `r  "X"` min, SD = `r "SD"`). The average transect width was `r 2.97` (SD = `r 1.34`). Due to technical problems with the ROV, inclement weather, or both, the ROV portion of this comparative survey had to be completed in several “legs” spanning several months between September and December. **Calculate new estimates of area using method of Stierhoff et al. 2016.**  
 
+### AUV  
+`Twenty-seven` cells were sampled throughout the survey area covering a total of `70,006` m^2^ and ranging in depth from `99` to `487` m: `13` on The Footprint, `six` on the flank of Footprint, and `eight` on Piggy Bank (**Table X**, **Figure X**).  `Seventeen` of the `27` cells were entirely within one 100-m depth stratum, while `ten` cells spanned two 100 m strata. The range of depths surveyed within a cell varied from 10 m to 83 m. Habitats encountered ranged from high-relief rock ridge to mud/sand bottom (**Figure x**). 
+
+## Seabed composition  
+### SUB
+
+### ROV
+
 ### AUV
-Twenty-seven cells were sampled throughout the survey area covering a total of 70,006 m^2^ and ranging in depth from 99 to 487 m: 13 on The Footprint, six on the flank of Footprint, and eight on Piggy Bank (**Table x**, **Figure 2**).  Seventeen of the 27 cells was entirely within one 100-m depth stratum, while ten cells spanned two 100 m strata. The range of depths surveyed within a cell varied from 10 m to 83 m. Habitats encountered ranged from high-relief rock ridge to mud/sand bottom (**Figure x**). Cells surveyed on the top of Piggy Bank (200-300 m) contained rocky ridge substrate (30%), mud (33%) and similar amounts of boulder and cobble (17 and 19%, respectively). With increasing depth, the percentage of mud and cobble substrates increased. The top two depth strata on the Footprint were primarily cobble and boulder, with sand and rock ridge increasing with depth (**Figure X**.  Mud was the primary substrate observed in all depth strata on the flank of the Footprint (86, 99 and 97%).  
+<!-- Cells surveyed on the top of Piggy Bank (200-300 m) contained rocky ridge substrate (30%), mud (33%) and similar amounts of boulder and cobble (17 and 19%, respectively). With increasing depth, the percentage of mud and cobble substrates increased. The top two depth strata on the Footprint were primarily cobble and boulder, with sand and rock ridge increasing with depth (**Figure X**.  Mud was the primary substrate observed in all depth strata on the flank of the Footprint (86, 99 and 97%).  -->
 
 ## Length frequency composition 
 
@@ -875,7 +902,7 @@ The overall coefficient of variation (CV) for abundance (range = `0.12`-`1.00`) 
 
 ### AUV
 **[WAITING FOR LIZ'S UPDATED RESULTS]**
-A total of `21,228` fishes from `51` taxa were identified during the survey including `18` rockfish species (**Table X**). Rockfishes comprised `75`% of the fishes encountered, including groups of unidentified rockfish (_Sebastes_ spp., **X%**), rosy-group rockfishes (_Sebastomus_, **X%**), and thornyheads (_Sebastolobus_ sp., **X%**), and other species that could be identified to species (**X%**). Notable were observations of `11` cowcod (_S. levis_), 29 bocaccio (_S. paucispinis_) and one bronzespotted rockfish (_S. gilli_). In addition, `53` lingcod (_Ophiodon elongatus_), `19` Pacific hake (_Merluccius productus_) and `10` sablefish (_Anoplopoma fimbria_) were observed. Fish assemblages varied between depth strata and between the two banks. Twenty-nine taxa only occurred on the Footprint or along its Flank. Two species were observed on Piggy Bank only.  
+_A total of `21,228` fishes from `51` taxa were identified during the survey including `18` rockfish species (**Table X**). Rockfishes comprised `75`% of the fishes encountered, including groups of unidentified rockfish (_Sebastes_ spp., **X%**), rosy-group rockfishes (_Sebastomus_, **X%**), and thornyheads (_Sebastolobus_ sp., **X%**), and other species that could be identified to species (**X%**). Notable were observations of `11` cowcod (_S. levis_), 29 bocaccio (_S. paucispinis_) and one bronzespotted rockfish (_S. gilli_). In addition, `53` lingcod (_Ophiodon elongatus_), `19` Pacific hake (_Merluccius productus_) and `10` sablefish (_Anoplopoma fimbria_) were observed. Fish assemblages varied between depth strata and between the two banks. Twenty-nine taxa only occurred on the Footprint or along its Flank. Two species were observed on Piggy Bank only. _ 
 
 ## Biodiversity  
 ### SUB  
@@ -901,6 +928,12 @@ The AUV was able to sample the deeper 400-500 m stratum on the flank of Footprin
 The species encountered by the AUV, ROV, and SUB were comparable.  
 
 Species diversity was similar amongst all three methodologies showing greater species richness at the The Footprint and lower richness at Piggy Bank.  The ROV and the SUB included records of rockfish species not identified by the AUV.  This could be due to the fact that the cameras on the AUV are positioned downward, rather than forward facing, allowing fish directly in front of the unit to escape detection. Another possible reason could be the difficulty in identifying some rockfish species from the dorsal view.  The AUV detected comparable numbers of fishes, but the fish were identified to groupings (i.e. Unidentified rockfish, or Sebastomus) as opposed to species.
+
+\newpage  
+
+# Literature Cited
+
+<div id = 'refs'></div>  
 
 \newpage
 
@@ -948,38 +981,51 @@ if (doc.type == "docx") {
 
 # Figures  
 
-```{r SurveyDomain,fig.height=6.5,fig.width=3.5,eval=FALSE}
-# insert image if Word or HTML output
-if(doc.type == "docx" | doc.type == "html"){
-# read image file and print result
-img <- readPNG(here("Figs/fig_ROV_survey_design.png"))
-grid.raster(img)
-}
+```{r SurveyDomain,fig.align='center',out.width='6in'}
+include_graphics(here("Figs/fig_ROV_survey_design.png"))
 ```  
 
-\begin{center}
-\includegraphics[width = 5 in]{../Figs/fig_ROV_survey_design.png}
-\end{center}
-
-**Figure 1.** Map of the survey area indicating the extent of the sampling area, which includes The Footprint and Piggy Bank (dashed yellow box), depth strata (blue polygons), and the 250 x 250 m grid used to randomly select AUV sample locations. The area within each polygon is in **Table X.** **[Replace with new figure without ROV transects, showing AUV 250x250 m grid and randomly selected cells]**.  
+**Figure 1.** Map of the survey area indicating the extent of the sampling area, which includes The Footprint and Piggy Bank (dashed yellow box), depth strata (blue polygons), and the 250 x 250 m grid used to randomly select AUV sample locations.  
 
 \newpage
 
-```{r AUVSamplingDesign,fig.height=6.5,fig.width=3.5,eval=FALSE}
-# insert image if Word or HTML output
-if(doc.type == "docx" | doc.type == "html"){
-# read image file and print result
-img <- readPNG(here("Figs/fig_ROV_survey_design.png"))
-grid.raster(img)
-}
+```{r AUVSamplingDesign,fig.align='center',out.width='6in'}
+include_graphics(here("Figs/fig_AUV_survey_design.png"))
 ```  
 
-\begin{center}
-\includegraphics[width = 5 in]{../Figs/fig_ROV_survey_design.png}
-\end{center}
-
-**Figure 2.** Locations of ROV, SUB, and AUV transects at the Footprint and Piggy Bank.  
+**Figure 2.** Map of the survey area indicating the extent of the sampling area, which includes The Footprint and Piggy Bank (dashed yellow box), depth strata (blue polygons), and the 250 x 250 m grid used to randomly select AUV sample locations. 
 
 \newpage
 
-# Literature cited
+```{r RasterAllCV,fig.align='center',out.width='7in'}
+include_graphics(here("Figs/fig_raster_both_all.png"))
+```  
+
+**Figure 3.** Mean abundance (n, left), biomass (kg, right), and coefficient of variation (CV, %; fill color) of all species encountered by at least one vehicle. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).
+
+\newpage
+
+```{r RasterSelectCV,fig.align='center',out.width='7in'}
+include_graphics(here("Figs/fig_raster_both_select.png"))
+```  
+
+**Figure 4.** Mean abundance (n, left), biomass (kg, right), and coefficient of variation (CV, %; fill color) of select species. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).  
+
+\newpage
+\blandscape
+
+```{r BootstrapBothFootprint,fig.align='center',out.width='9in'}
+include_graphics(here("Figs/fig_density_both_footprint.png"))
+```  
+
+**Figure 5.**  Distribution of mean abundance (n, top) and biomass (kg, bottom) estimates of select species at The Footprint. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).
+
+\newpage
+
+```{r BootstrapBothPiggy,fig.align='center',out.width='9in'}
+include_graphics(here("Figs/fig_density_both_piggy.png"))
+```  
+
+**Figure 6.** Distribution of mean abundance (n, top) and biomass (kg, bottom) estimates of select species at Piggy Bank. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).
+
+\elandscape
