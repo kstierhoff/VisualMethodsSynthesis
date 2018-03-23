@@ -763,13 +763,11 @@ ggsave(boot.dens.plot.all, filename = here("Figs/fig_density_both_piggy.png"), h
 ```
 
 
-**Estimates of groundfish biomass, abundance, and diversity using different optical sampling tools and methods** 
+**Estimates of groundfish biomass, abundance, and diversity using different optical sampling methods** 
 
 Kevin L. Stierhoff^1^, Mary M. Yoklavich^2^, and M. Elizabeth Clarke^3^, Jeff Anderson^4^, Erica L. Fruh^3^, Thomas E. Laidig^2^, Scott A. Mau^1^, David W. Murfin^1^, Abigail Powell^3^, Jeremy C. Taylor^4^, Diana L. Watters^2^  
 
-**Order of authorship (presently): PIs, followed by technical staff in ABC order. Please suggest additions, subtractions, and/or changes to the order.**  
-
-Draft date: `r format(Sys.time(), "%d %B %Y")`'
+**Order of authorship is presently: PIs, followed by technical staff (in ABC order). Please suggest additions, subtractions, and/or changes to the order.**  
 
 ^1^Fisheries Resources Division  
 Southwest Fisheries Science Center  
@@ -795,11 +793,13 @@ NOAA-National Marine Fisheries Service
 1845 Wasp Boulevard  
 Honolulu, HI 96818  
 
+Draft date: `r format(Sys.time(), "%d %B %Y")`
+
 \newpage
 
 # Abstract  
 
-TBD
+**[To Do last]**
 
 \newpage  
 
@@ -831,7 +831,7 @@ A pilot aboard the vessel operated the ROV along planned transect routes. The lo
 The AUV navigated along its programmed route using a DVL (1200 kHz Workhorse Navigator; Teledyne RD Instruments), gyrocompass/inertial motion sensor (iXSea, OCTANS), and the GPS coordinates acquired while on the surface at the dive launch point. The actual location of the AUV above the seabed was estimated from the support vessel using a USBL acoustic tracking system (TrackLink 1500, LinkQuest, Inc.) and dGPS (**Model, Manufacturer??**). The depth of the AUV was determined using a pressure sensor (**Model?**, Paroscientific) and temperature, salinity, **other?** were measured using a CTD (Model 49 FastCat, Sea-Bird). Stereo images were collected every 10 s using a calibrated, downward-facing stereo camera pair (5-megapixel, 12-bit dynamic range GigE machine vision cameras; Prosilica) synced to a strobe (**[model important?]**); a third GigE camera was angled forward at and angle of 30^$\circ$^strobe synced with the downward-facing stereo cameras. All data were time-stamped and logged synchronously using **[list software, if used]**.
 
 ## Visual analysis  
-All target species observed by each vehicle were identified to the lowest possible taxon, counted, and measured. The identification of fishes observed in SUB and ROV video was aided by audio annotations (SUB) and still images (ROV). The identification of fishes observed in the non-overlapping, color-corrected stereo images from the downward-facing AUV camera was aided by photos from the third angled camera. When fishes could not be identified to species species level, they were identified to the genus (e.g., unidentified rockfish, _Sebastes_ spp.; or unidentified thornyhead, _Sebastolobus_ spp.) or subgenus level (e.g., rosy-group rockfish, _Sebastomus_), if possible. Lengths of fishes observed by the AUV were estimated to 1 cm resolution using custom stereo image analysis software (_Sebastes_, NWFSC). Lengths of fishes observed from the SUB and ROV were estimated to the nearest 5- or 10-cm using calibrated parallel lasers for reference. When fish were oriented normal to the camera lens and near the reference lasers, length of fishes observed by the ROV were to the nearest 1 cm using image analysis software (ImageJ, National Institute of Health).
+All target species observed by each vehicle were identified to the lowest possible taxon, counted, and measured. The identification of fishes observed in SUB and ROV video was aided by audio annotations (SUB) and still images (ROV). The identification of fishes observed in the non-overlapping, color-corrected stereo images from the downward-facing AUV camera was aided by photos from the third angled camera. When fishes could not be identified to species species level, they were identified to the genus (e.g., unidentified rockfish, _Sebastes_ spp.; or unidentified thornyhead, _Sebastolobus_ spp.) or subgenus level (e.g., rosy-group rockfish, _Sebastomus_), if possible. Lengths of fishes observed by the AUV were estimated to 1 cm resolution using custom stereo image analysis software (Sebastes, NWFSC). Lengths of fishes observed from the SUB and ROV were estimated to the nearest 5- or 10-cm using calibrated parallel lasers for reference. When fish were oriented normal to the camera lens and near the reference lasers, length of fishes observed by the ROV were to the nearest 1 cm using image analysis software (ImageJ, National Institute of Health).
 
 ## Sampling effort
 The abundance and biomass of observed fishes was calculated using the area of each transect. For the SUB, transect distance was estimated every **3 s** using **speed/distance** measured by the **DVL/gyrocompass**; transect width was estimated **every X interval** by the on-board scientist using the combination of: 1) a hand-held sonar, 2) the SUB's sonar **[What is this? Was it used?]**, and 3) a crossing laser set to intersect the parallel laser at **3 m** from the observer when the submersible was **1 m** above the seabed; and transect area was estimated as the summed product of transect distance and width estimates. For the ROV, transect distance was estimated from ROV speed, transect width was estimated from the ROV altitude and the optical properties of the video cameras, and transect area was estimated as the summed product of distance and transect width estimates measured every 2-s [@Stierhoff2016]. For the AUV, transect area was estimated **a)** as the sum of the area of non-overlapping stereo image pairs estimated using custom software (_Sebastes_, NWFSC) or **b)** altitude off the bottom and the specified camera field of view **(Please choose which method)**. Each vehicle aimed to survey the planned transects at a constant speed and altitude above the seabed. Transect segments during which the seabed was not clearly visible were removed from the analysis.  
@@ -839,51 +839,24 @@ The abundance and biomass of observed fishes was calculated using the area of ea
 ## Seabed characterization  
 Primary and secondary geologic seabed characteristics were described at the beginning of the transect, at the time of each fish observation, and also at any transition between different seabed types, allowing for the description of associations between each species and different seabed types and also the estimation of area searched within each seabed type. Both the primary (>50% of the seabed within the strip area) and secondary (20-50% of the seabed within the strip area) seabed characteristics were described. Seabed classifications generally followed the classification scheme of Greene et al. [-@Greene1999], and were based on particle size: mud (clay to silt; <0.06 mm), sand (0.06-2 mm), pebble (2-64 mm), cobble (64-256 mm), boulder (0.25-3 m), low-complexity (<0.25 m pavement) reef, and highcomplexity (>0.25 m) reef. The term "complexity" refers to the presence and the size of cracks and crevices in the seabed that may provide refuge to rockfishes. Based on the size and shape of these features, low-complexity and high-complexity reef probably serve the same ecological function as sand/pebble and cobble/boulder, respectively. The area of each substratum type in a transect was estimated as the product of the transect width and the distance between seabed types for the SUB and ROV, or as the total area of images containing similar seabed types for the AUV.  
 
-## Estimation of abundance and biomass
-The total abundance and biomass of each species was estimated within each stratum. Total abundance ($N$) in each transect was estimated using the strip transect method (Buckland et al. 2001) by multiplying the mean density of each species ($D$; **get correct symbol**) within a stratum by the total area ($A$) within that stratum (**Table X**). For each transect, density was calculated as: $D = n / a$, where $n$ is the number of individuals encountered and $a$ is the transect area. The total area of each depth stratum was estimated using ArcGIS (**Table 2**). The biomass ($B$) for each species was estimated from $TL$ as: $B = a * (TL)^b$, where $a$ and $b$ are the taken from published relationships between TL and mass (**Appendix/Table X**). For fishes assigned to 10-cm length bins, the midpoint of each size class was used to estimate biomass (e.g., 5 cm for the 0-10 cm class). Many species for which few or no voucher specimens are available (e.g., dwarf-red rockfish, _S. rufinanus_; rosethorn rockfish, _S. simulator_; and pygmy rockfish, _S. wilsoni_), coefficients for closely related species (as described by Hyde & Vetter 2007) were used. The relationship for vermilion rockfish (_S. miniatus_) was substituted for the newly described sunset rockfish (_S. crocotulus_; Hyde et al. 2008). Since many of the unidentified rockfishes were of the semi-pelagic, aggregating variety, coefficients for squarespot rockfishes (_S. hopkinsi_, the most common species with similar behavior and vertical distribution) were used. For unidentified rosy-group fishes (_Sebastomus_), coefficients for swordspine rockfish (_S. ensifer_, the most common _Sebastomus_ species observed) was used. Mean, CV of the mean, and 90%-quantile confidence intervals for abundance and biomass were estimated using a non-parametric bootstrap of 1,000 samples (Efron & Tibshirani 1993).  
+## Population estimation
+For each species, abundance (_N_) and biomass (_M_) was estimated using the strip transect sampling method [@Buckland2001]. For each sample (_i_, transect or grid), numeric density (_d~N~_) was calculated as: $d_{N_i} = n_i/a_i$, where _n_ is the number of individuals observed and _a_ is the sample area. Abundance within each stratum (_j_) was then calculated as: $N_j = d_{N_i} * A_j$, where _A_ is the stratum area. For each sample, biomass density (_d~M~_) was also calculated as: $d_{M_i} = (m_i * n_i) / A_i$, where _m_ is the total biomass of individuals observed in the sample, calculated as the sum of individual biomasses estimated from total length using published length-to-weight relationships (see **Table 1**). Biomass within each stratum was then calculated as: $M_j = d_{M_i} * A_j$. Biomasses for fish assigned to 10-cm length bins from ROV surveys, the midpoint of the size class was used to estimate biomass (e.g., 5 cm for the 0-10 cm class). For species where the length-to-weight relationship was unknown (e.g., dwarf-red rockfish, _S. rufinanus_; rosethorn rockfish, _S. simulator_; and pygmy rockfish, _S. wilsoni_), coefficients for closely related species were used [see @Hyde2007]. Coefficients for vermilion rockfish (_S. miniatus_) were used for sunset rockfish [_S. crocotulus_; @Hyde2008a]. Since many of the unidentified rockfishes were of the semi-pelagic, aggregating variety, coefficients were used from squarespot rockfishes (_S. hopkinsi_, the most commonly identified species in this study with similar behavior and vertical distribution). For unidentified rosy-group rockfishes (_Sebastomus sp._), coefficients were used from swordspine rockfish (_S. ensifer_, the most commonly identified _Sebastomus_ species observed in this study). Mean, CV of the mean, and 95%-quantile confidence intervals for abundance and biomass were estimated using a non-parametric bootstrap of `r B` samples [@Efron1993].  
 
-We substituted coefficients from closely related species for chameleon (_S. phillipsi_), dwarf-red (_S. rufinanus_), and pygmy (_S. wilsoni_) rockfishes and unidentified thornyheads and _Sebastomus_ because coefficients were unavailable for these taxa. Biomass density (kg 100 m^-2^) was then calculated for each taxon on each transect by summing the weights of individuals and dividing by the transect area. The mean and variance of biomass density were calculated from transects within each depth stratum, and expanded to total biomass and variance by multiplying by the area of the depth stratum. Total biomass and variance for each bank and the banks combined were estimated by summing biomass and variance for all depth strata. Coefficient of variation (CV) was calculated as CV = sqrt(var(B)/B).  
-
-### AUV  
-Digital still images were downloaded at the end of each mission and color-corrected. All non-overlapping images from the port, downward-facing camera were reviewed to identify and count all fish observed; images from the angled camera were used to aid in the identification of fishes observed. The area of each image was estimated using the measured altitude above the seabed and the specified camera field of view.  
-
-For each of the three focal areas (Footprint, Footprint flank, Piggy Bank) we estimated total abundance of each species and some taxonomic groups. To estimate abundance, first we calculated fish density per cell. The total number of fish observed in the AUV images for each cell were summed and then divided by the area surveyed in that cell.  Then we calculated the mean cell density and coefficients of variation (CV) for each of the focal areas.  In order to provide comparable results to the ROV surveys we also used a second method to calculate estimates of the mean, CV and 90% confidence intervals for abundance and biomass using a bootstrap of 1000 samples. In both cases, the mean fish densities were expanded to total abundance and variance for each focal area by multiplying mean cell density by the total areas of Footprint, Footprint flank and Piggy Bank.  The coefficient of variation was calculated as: 
-
-$$CV = \frac{\sigma}{\mu}$$
-
-where $\mu$ is the mean of the cell densities and $\sigma$ is the standard deviation of the cell means. Biomass was estimated from known length-weight relationships as:
-
-$$B = a * TL^b$$
-
-where _TL_ is the total length estimated from stereo image measurements. Species coefficients for _a_ and _b_ are listed in Appendix **XXX**.  
 ## Biodiversity estimates  
-### SUB
-
-### ROV  
-Species richness ($S$); species diversity (Shannon $H’$), and Simpson's lambda ($\lambda$) were computed for each transect and then summarized within each depth stratum and at each bank. The expected species richness (rarefaction) in a particular sample from that stratum was estimated and arefaction curves were generated for each bank using the. All biodiversity estimates were generated using the _vegan_ package (**Oksanen et al. 2012**) in R (**R Development Core Team 2011**).  
-
-### AUV  
+**[ROV]** Species richness ($S$); species diversity (Shannon $H’$), and Simpson's lambda ($\lambda$) were computed for each transect and then summarized within each depth stratum and at each bank. The expected species richness (rarefaction) in a particular sample from that stratum was estimated and arefaction curves were generated for each bank using the. All biodiversity estimates were generated using the _vegan_ package [@Oksanen2012] in R [@RCoreTeam2017].  
 
 # Results  
 ## Survey effort  
-**[Assemble a table of n transects, distance, and area for each method, bank, and depth stratum.]**  
+**(Table 2)**.  
 
-### SUB  
-A total of `69` transects were conducted between `95`-`400` m during `17` dives on Footprint (n = `55` transects) and Piggy Bank (n = `14` transects) covering a total distance of `52000` m^2^ (total area = `0.05` km^2^) (**Table X**; **Figure X**). Mean transect length was `294` m (SE = `8` m). Dive duration ranged from 1.4 to `3.2` h (mean = `2.3` h, SE = `0.1` h).  
+**[SUB]** A total of `69` transects were conducted between `95`-`400` m during `17` dives on Footprint (n = `55` transects) and Piggy Bank (n = `14` transects) covering a total distance of `52000` m^2^ (total area = `0.05` km^2^) (**Table X**; **Figure X**). Mean transect length was `294` m (SE = `8` m). Dive duration ranged from 1.4 to `3.2` h (mean = `2.3` h, SE = `0.1` h).  
 
-### ROV  
-A total of `r 37` transects were surveyed from ~`r 90` to `r 390` m. The majority of transects were conducted between the depths of 100 to 300 m on the Footprint, and from 200 to 300 m on Piggy Bank (**Table 2**, **Fig. 1**). The transect length ranged from ~`r 300` to `r 1300` m (mean = `r  "X"` m, SD = `r "SD"`), area ranged from (mean = `r  "X"` m^2^, SD = `r "SD"`), and duration ranged from ` r20` to `r 140` min (mean = `r  "X"` min, SD = `r "SD"`). The average transect width was `r 2.97` (SD = `r 1.34`). Due to technical problems with the ROV, inclement weather, or both, the ROV portion of this comparative survey had to be completed in several “legs” spanning several months between September and December. **Calculate new estimates of area using method of Stierhoff et al. 2016.**  
+**[ROV]** A total of `r 37` transects were surveyed from ~`r 90` to `r 390` m. The majority of transects were conducted between the depths of 100 to 300 m on the Footprint, and from 200 to 300 m on Piggy Bank (**Table 2**, **Fig. 1**). The transect length ranged from ~`r 300` to `r 1300` m (mean = `r  "X"` m, SD = `r "SD"`), area ranged from (mean = `r  "X"` m^2^, SD = `r "SD"`), and duration ranged from ` r20` to `r 140` min (mean = `r  "X"` min, SD = `r "SD"`). The average transect width was `r 2.97` (SD = `r 1.34`). Due to technical problems with the ROV, inclement weather, or both, the ROV portion of this comparative survey had to be completed in several “legs” spanning several months between September and December. **Calculate new estimates of area using method of Stierhoff et al. 2016.**  
 
-### AUV  
-`Twenty-seven` cells were sampled throughout the survey area covering a total of `70,006` m^2^ and ranging in depth from `99` to `487` m: `13` on The Footprint, `six` on the flank of Footprint, and `eight` on Piggy Bank (**Table X**, **Figure X**).  `Seventeen` of the `27` cells were entirely within one 100-m depth stratum, while `ten` cells spanned two 100 m strata. The range of depths surveyed within a cell varied from 10 m to 83 m. Habitats encountered ranged from high-relief rock ridge to mud/sand bottom (**Figure x**). 
+**[AUV]** `Twenty-seven` cells were sampled throughout the survey area covering a total of `70,006` m^2^ and ranging in depth from `99` to `487` m: `13` on The Footprint, `six` on the flank of Footprint, and `eight` on Piggy Bank (**Table X**, **Figure X**).  `Seventeen` of the `27` cells were entirely within one 100-m depth stratum, while `ten` cells spanned two 100 m strata. The range of depths surveyed within a cell varied from 10 m to 83 m. Habitats encountered ranged from high-relief rock ridge to mud/sand bottom (**Figure x**). 
 
 ## Seabed composition  
-### SUB
-
-### ROV
-
-### AUV
-<!-- Cells surveyed on the top of Piggy Bank (200-300 m) contained rocky ridge substrate (30%), mud (33%) and similar amounts of boulder and cobble (17 and 19%, respectively). With increasing depth, the percentage of mud and cobble substrates increased. The top two depth strata on the Footprint were primarily cobble and boulder, with sand and rock ridge increasing with depth (**Figure X**.  Mud was the primary substrate observed in all depth strata on the flank of the Footprint (86, 99 and 97%).  -->
+**[AUV]** Cells surveyed on the top of Piggy Bank (200-300 m) contained rocky ridge substrate (30%), mud (33%) and similar amounts of boulder and cobble (17 and 19%, respectively). With increasing depth, the percentage of mud and cobble substrates increased. The top two depth strata on the Footprint were primarily cobble and boulder, with sand and rock ridge increasing with depth (**Figure X**.  Mud was the primary substrate observed in all depth strata on the flank of the Footprint (86, 99 and 97%).
 
 ## Length frequency composition 
 
@@ -989,9 +962,52 @@ if (doc.type == "docx") {
 }
 ```  
 
+\newpage  
+
+**Table 2** Number of samples, sampling distance (km), and sampling area (km^2^) for each vehicle, site, and depth stratum ("All" if sampling not stratified by depth; e.g., AUV).
+
+```{r EffortSummary}
+sample.summ <- boot.data.all %>% 
+  select(platform, site, stratum, dive_name, distance, area) %>% 
+  distinct() %>% 
+  group_by(platform, site, stratum) %>% 
+  summarise(
+    n_samples = n(),
+    distance  = sum(distance)/1000,
+    area      = sum(area)*1e-6) %>% 
+  mutate(
+    stratum.name = case_when(
+      stratum == "(-100,0]" ~ "<100 m",
+      stratum == "(-200,-100]" ~ "100-200 m",
+      stratum == "(-300,-200]" ~ "200-300 m",
+      stratum == "(-400,-300]" ~ "300-400 m",
+      TRUE ~ "All")) %>% 
+  select(Vehicle = platform, Site = site, Stratum = stratum.name, 
+         Samples = n_samples, Distance = distance, Area = area)
+
+
+# Format and print table of observations
+if (doc.type == "docx") {
+  sample.summ %>% 
+    regulartable() %>% 
+    align(align  = "center", part = "header") %>% 
+    autofit()
+} else {
+  sample.summ %>% 
+    kable(format      = knitr.format, booktabs = T, escape = F,
+          align       = c("l","l","r","r","r","r"),
+          digits      = c(0,0,0,0,2,4),
+          format.args = list(big.mark = ",")) %>% 
+    kable_styling(latex_options = c("striped", "condensed",
+                                    "repeat_header", "scale_down"),
+                  position = "center") %>% 
+    collapse_rows(columns = c(1,2))
+}
+```
+
 \newpage 
 
-**Table 2.** Summary of observations from the ROV, SUB, and AUV (**to be added later**) for all species encountered during the survey.  
+**Table 3.** Summary of observations from the ROV, SUB, AUV (**to be added later**), and All vehicles. **Data are presently sorted descending by % of all observations. We can sort by species name if preferred.**  
 
 ```{r ObsSummary}
 # Combine summaries from each vehicle
@@ -1001,10 +1017,16 @@ obs.all.summ <- obs.rov.summ %>%
   # left_join(obs.auv.summ) %>% 
   mutate(nGrand = nROV + nSUB) %>% 
   mutate(pctGrand = nGrand/sum(.$nGrand)*100) %>% 
-  arrange(desc(pctGrand)) %>% 
+  arrange(desc(pctGrand), sciName) %>% 
   rename(
       "Scientific name" = sciName,
-      "Common name" = commonName)
+      "Common name"     = commonName,
+      "$N_R$"             = nROV,
+      "$\\%_R$"           = pctROV,
+      "$N_S$"             = nSUB,
+      "$\\%_S$"           = pctSUB,
+      "$N_G$"             = nGrand,
+      "$\\%_G$"           = pctGrand)
 
 # Format and print table of observations
 if (doc.type == "docx") {
@@ -1013,30 +1035,31 @@ if (doc.type == "docx") {
     italic(j = 1) %>%
     add_header(`Scientific name`  = "",
                `Common name`  = "",
-               nROV   = "ROV", pctROV = "ROV", 
-               nSUB   = "SUB", pctSUB = "SUB", 
-               nGrand = "All", pctGrand = "All") %>% 
+               "$N_R$" = "ROV", "$\\%_R$" = "ROV", 
+               "$N_S$" = "SUB", "$\\%_S$" = "SUB", 
+               "$N_G$" = "All", "$\\%_G$" = "All") %>% 
     merge_h(part = "header") %>% 
-    align(align = "center",part = "header") %>% 
+    align(align  = "center", part = "header") %>% 
     autofit()
 } else {
   obs.all.summ %>% 
-    kable(format = knitr.format,booktabs = T, escape = F,
-          align = c("l","l","r","r","r","r","r","r"),
-          digits = c(0,0,0,1,0,1,0,1)) %>% 
-    kable_styling(latex_options = c("striped","condensed",
-                                    "repeat_header","scale_down"),
+    kable(format      = knitr.format,booktabs = T, escape = F,
+          align       = c("l","l","r","r","r","r","r","r"),
+          digits      = c(0,0,0,1,0,1,0,1),
+          format.args = list(big.mark = ",")) %>% 
+    kable_styling(latex_options = c("striped", "condensed",
+                                    "repeat_header"),
                   position = "center") %>% 
-    column_spec(1, italic = T) %>%
+    column_spec(1, italic = T) %>% 
     add_header_above(c(" " = 2, "ROV" = 2, "SUB" = 2, "All" = 2)) 
 }
 ```  
 
 \newpage  
 
-**Table 3.** Summary of bootstrap results for SUB.
+**Table 4.** Bootstrap estimates of abundance and biomass from the SUB. **Data are presently sorted by site and species name. Consider sorting descending by abundance or biomass.**
 
-```{r BootResultsSUB}
+```{r BootSummarySUB}
 boot.summ.table <- boot.summ.sample.all %>% 
   left_join(select(spp, sciName, commonName)) %>% 
   select(sciName, commonName, everything(), -samples, -biom_cv_cut, -abund_cv_cut, -stratum_area) %>% 
@@ -1044,14 +1067,15 @@ boot.summ.table <- boot.summ.sample.all %>%
   rename(`Scientific name`       = sciName,
          `Common name`           = commonName,
          Site                    = site,
-         "Mean$_{A}$"            = abund.mean,
-         "CV$_{A}$"              = abund.cv,
-         "Lower CI$_{A, 95\\%}$" = abund.ci.low,
-         "Upper CI$_{A, 95\\%}$" = abund.ci.hi,
-         "Mean$_{B}$"            = biom.mean,
-         "CV$_{B}$"              = biom.cv,
-         "Lower CI$_{B, 95\\%}$" = biom.ci.low,
-         "Upper CI$_{B, 95\\%}$" = biom.ci.hi)
+         "Mean$_{N}$"            = abund.mean,
+         "CV$_{N}$"              = abund.cv,
+         "Lower CI$_{N, 95\\%}$" = abund.ci.low,
+         "Upper CI$_{N, 95\\%}$" = abund.ci.hi,
+         "Mean$_{M}$"            = biom.mean,
+         "CV$_{M}$"              = biom.cv,
+         "Lower CI$_{M, 95\\%}$" = biom.ci.low,
+         "Upper CI$_{M, 95\\%}$" = biom.ci.hi) %>% 
+  select(Site, everything())
 
 # Select SUB results
 boot.table.sub <- filter(boot.summ.table, platform == "SUB") %>% 
@@ -1066,14 +1090,14 @@ if (doc.type == "docx") {
       `Scientific name`       = "",
       `Common name`           = "",
       Site                    = "",
-      "Mean$_{A}$"            = "Abundance",
-      "CV$_{A}$"              = "Abundance",
-      "Lower CI$_{A, 95\\%}$" = "Abundance",
-      "Upper CI$_{A, 95\\%}$" = "Abundance",
-      "Mean$_{B}$"            = "Biomass",
-      "CV$_{B}$"              = "Biomass",
-      "Lower CI$_{B, 95\\%}$" = "Biomass",
-      "Upper CI$_{B, 95\\%}$" = "Biomass") %>% 
+      "Mean$_{N}$"            = "Abundance",
+      "CV$_{N}$"              = "Abundance",
+      "Lower CI$_{N, 95\\%}$" = "Abundance",
+      "Upper CI$_{N, 95\\%}$" = "Abundance",
+      "Mean$_{M}$"            = "Biomass",
+      "CV$_{M}$"              = "Biomass",
+      "Lower CI$_{M, 95\\%}$" = "Biomass",
+      "Upper CI$_{M, 95\\%}$" = "Biomass") %>% 
     merge_h(part = "header") %>% 
     align(align = "center", part = "header") %>% 
     autofit()
@@ -1086,16 +1110,17 @@ if (doc.type == "docx") {
     kable_styling(latex_options = c("striped","condensed",
                                     "repeat_header","scale_down"),
                   position = "center") %>% 
-    column_spec(1, italic = T) %>%
+    column_spec(2, italic = T) %>%
+    collapse_rows(columns = c(1)) %>% 
     add_header_above(c(" " = 3, "Abundance" = 4, "Biomass" = 4)) 
 }
 ```
 
 \newpage  
 
-**Table 4.** Summary of bootstrap results for ROV.
+**Table 4.** Bootstrap estimates of abundance and biomass from the ROV. **Data are presently sorted by site and species name. Consider sorting descending by abundance or biomass.**
 
-```{r BootResultsROV}
+```{r BootSummaryROV}
 # Select SUB results
 boot.table.rov <- filter(boot.summ.table, platform == "ROV") %>% 
   select(-platform)
@@ -1104,19 +1129,19 @@ boot.table.rov <- filter(boot.summ.table, platform == "ROV") %>%
 if (doc.type == "docx") {
   boot.table.rov %>%
     regulartable() %>% 
-    italic(j = 1) %>%
+    italic(j = 2) %>%
     add_header(
+      "Site"                  = "",
       `Scientific name`       = "",
       `Common name`           = "",
-      Site                    = "",
-      "Mean$_{A}$"            = "Abundance",
-      "CV$_{A}$"              = "Abundance",
-      "Lower CI$_{A, 95\\%}$" = "Abundance",
-      "Upper CI$_{A, 95\\%}$" = "Abundance",
-      "Mean$_{B}$"            = "Biomass",
-      "CV$_{B}$"              = "Biomass",
-      "Lower CI$_{B, 95\\%}$" = "Biomass",
-      "Upper CI$_{B, 95\\%}$" = "Biomass") %>% 
+      "Mean$_{N}$"            = "Abundance",
+      "CV$_{N}$"              = "Abundance",
+      "Lower CI$_{N, 95\\%}$" = "Abundance",
+      "Upper CI$_{N, 95\\%}$" = "Abundance",
+      "Mean$_{M}$"            = "Biomass",
+      "CV$_{M}$"              = "Biomass",
+      "Lower CI$_{M, 95\\%}$" = "Biomass",
+      "Upper CI$_{M, 95\\%}$" = "Biomass") %>% 
     merge_h(part = "header") %>% 
     align(align = "center", part = "header") %>% 
     autofit()
@@ -1129,16 +1154,17 @@ if (doc.type == "docx") {
     kable_styling(latex_options = c("striped","condensed",
                                     "repeat_header","scale_down"),
                   position = "center") %>% 
-    column_spec(1, italic = T) %>%
+    column_spec(2, italic = T) %>%
+    collapse_rows(columns = c(1)) %>% 
     add_header_above(c(" " = 3, "Abundance" = 4, "Biomass" = 4)) 
 }
 ```  
 
 \newpage  
 
-**Table 5.** Summary of bootstrap results for AUV.
+**Table 5.** Bootstrap estimates of abundance and biomass from the AUV. **[ADD]. Data are presently sorted by site and species name. Consider sorting descending by abundance or biomass.**
 
-```{r BootResultsAUV}
+```{r BootSummaryAUV}
 
 ```
 
@@ -1147,18 +1173,18 @@ if (doc.type == "docx") {
 # Figures  
 
 ```{r SurveyDomain,fig.align='center',out.width='6in'}
-include_graphics(here("Figs/fig_ROV_survey_design.png"))
+include_graphics(here("Figs/fig_AUV_survey_design.png"))
 ```  
 
-**Figure 1.** Map of the survey area indicating the extent of the sampling area, which includes The Footprint and Piggy Bank (dashed yellow box), depth strata (blue polygons), and the 250 x 250 m grid used to randomly select AUV sample locations.  
+**Figure 1. [MAKING NEW]** Map of the survey area indicating the extent of the sampling area, which includes The Footprint and Piggy Bank (dashed yellow box), depth strata (blue polygons), and the 250 x 250 m grid used to randomly select AUV sample locations.  
 
 \newpage
 
 ```{r AUVSamplingDesign,fig.align='center',out.width='6in'}
-include_graphics(here("Figs/fig_AUV_survey_design.png"))
+include_graphics(here("Figs/fig_ROV_survey_design.png"))
 ```  
 
-**Figure 2.** Map of the survey area indicating the extent of the sampling area, which includes The Footprint and Piggy Bank (dashed yellow box), depth strata (blue polygons), and the 250 x 250 m grid used to randomly select AUV sample locations. 
+**Figure 2. [MAKING NEW]** Location of SUB, ROV, and AUV samples at The Footprint and Piggy Bank. [symbolize transects by platform type; include depth strata a AUV grid]
 
 \newpage
 
@@ -1166,7 +1192,7 @@ include_graphics(here("Figs/fig_AUV_survey_design.png"))
 include_graphics(here("Figs/fig_raster_both_all.png"))
 ```  
 
-**Figure 3.** Mean abundance (n, left), biomass (kg, right), and coefficient of variation (CV, %; fill color) of all species encountered by at least one vehicle. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).
+**Figure 3.** Mean abundance (_N_; left), biomass (_M_, kg; right), and coefficient of variation (CV, %; fill color) of all species encountered by at least one vehicle and across all sampling strata. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).
 
 \newpage
 
@@ -1174,7 +1200,7 @@ include_graphics(here("Figs/fig_raster_both_all.png"))
 include_graphics(here("Figs/fig_raster_both_select.png"))
 ```  
 
-**Figure 4.** Mean abundance (n, left), biomass (kg, right), and coefficient of variation (CV, %; fill color) of select species. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).  
+**Figure 4.** Mean abundance (_N_; left), biomass (_M_, kg; right), and coefficient of variation (CV, %; fill color) of select species across all sampling strata. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).  
 
 \newpage
 \blandscape
@@ -1183,7 +1209,7 @@ include_graphics(here("Figs/fig_raster_both_select.png"))
 include_graphics(here("Figs/fig_density_both_footprint.png"))
 ```  
 
-**Figure 5.**  Distribution of mean abundance (n, top) and biomass (kg, bottom) estimates of select species at The Footprint. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).
+**Figure 5.**  Distribution of mean abundance (_N_; top) and biomass (_M_, kg; bottom) estimates of select species at The Footprint. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV). **[selected these species for exploration; can add/remove very easily, but chose these particulary interesting species initially]**
 
 \newpage
 
@@ -1191,6 +1217,6 @@ include_graphics(here("Figs/fig_density_both_footprint.png"))
 include_graphics(here("Figs/fig_density_both_piggy.png"))
 ```  
 
-**Figure 6.** Distribution of mean abundance (n, top) and biomass (kg, bottom) estimates of select species at Piggy Bank. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).
+**Figure 6.** Distribution of mean abundance (_N_; top) and biomass (_M_, kg; bottom) estimates of select species at Piggy Bank. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV). **[selected these species for exploration as above; however, not all of the species in The Footprint figure were observed at Piggy Bank]**
 
 \elandscape
