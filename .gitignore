@@ -3,8 +3,10 @@
 .RData
 .Ruserdata
 *.accdb
+*.log
 tex2pdf*
 Doc/*.pdf
+Doc/*.docx
 GIS/*.tif
 GIS/*.ovr
 Figs/
