@@ -8,8 +8,6 @@ tex2pdf*
 Doc/*.pdf
 Doc/*.docx
 Doc/archive/*
-GIS/*.tif
-GIS/*.ovr
 Figs/
 Output/*.csv
 Reports/

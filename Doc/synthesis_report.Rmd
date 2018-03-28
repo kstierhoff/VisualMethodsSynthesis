@@ -5,24 +5,24 @@ header-includes: \usepackage{array} \usepackage{booktabs} \usepackage{calc} \use
   \usepackage{tabu} \usepackage{tabularx} \usepackage{textcomp} \usepackage{threeparttable} \usepackage{upgreek}
   \usepackage{wrapfig} \newcommand{\blandscape}{\begin{landscape}} \newcommand{\elandscape}{\end{landscape}}
 output:
+  pdf_document:
+    fig_caption: no
+  html_document: default
   word_document:
     reference_docx: template/report_template_Rmarkdown.docx
     pandoc_args: [
      "--filter", "yaml/pandoc_newpage_filter.R"
      ]
-  html_document: default
-  pdf_document:
-    fig_caption: no
 bibliography: bib/ast_bib.bib
 csl: csl/ices-journal-of-marine-science.csl
 ---  
 
 ```{r ConfigureDocument, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
 # List packages required to run the script
-pkgs <- c("sf","tidyverse","knitr","swfscMisc","lubridate","here","boot",
+pkgs <- c("raster","tidyverse","knitr","swfscMisc","lubridate","here","boot","sf",
           "maps","readxl","maptools","png","mapdata","flextable","knitr",
           "cowplot","devtools","kableExtra","RODBC","pander","DBI",
-          "rnaturalearth","odbc")
+          "rnaturalearth","odbc","shadowtext")
 # Install and load all CRAN packages provided from a character vector
 load_pkgs = function(pkgs) {
   new_pkgs = pkgs[!(pkgs %in% installed.packages()[ ,'Package'])]
@@ -61,9 +61,10 @@ if (doc.type == "latex") {
 # processing instructions (TRUE/FALSE)
 import.data <- F # Download data from SQL database
 sub.source  <- "Access" # Or DSN if getting from database directly
-save.figs   <- T # Draw plots and maps, or use existing
+save.figs   <- F # Draw plots and maps, or use existing
 do.boot     <- F # Conduct bootstrap resampling
 get.sf      <- F # Download costline data
+n.boot      <- 1000 # Number of bootstrap samples
 
 # Set plotting preferences
 rov.colour = "yellow"
@@ -71,7 +72,7 @@ sub.colour = "blue"
 auv.colour = "green"
 
 # Set figure dimensions
-fig.width = 5
+fig.width  = 5
 fig.height = 7
 ```  
 
@@ -87,11 +88,10 @@ site.area <- strata.area %>%
   summarize(stratum_area = sum(stratum_area))
 ```
 
-
 ```{r ImportROV}
 if (import.data) {
   channel = odbcConnect(dsn = 'ROV2')
-  nav.rov              <- sqlQuery(channel,"
+  nav.rov <- sqlQuery(channel,"
             SELECT dbo.tbl_NAV.*, dbo.tbl_LOGS.survey_number, dbo.tbl_LOGS.site_general
             FROM dbo.tbl_LOGS INNER JOIN dbo.tbl_NAV ON dbo.tbl_LOGS.dive_name = dbo.tbl_NAV.dive_name
             WHERE (((dbo.tbl_LOGS.survey_number)=40));")
@@ -154,19 +154,26 @@ nav.rov <- bind_cols(nav.rov,cw.data) %>%
   filter(pitch < 0 & slant_range <= 6) %>% 
   mutate(area = center_width * disp)
 
-# Summmarise distance by dive and depth stratum for bootstrap analysis
+# Summmarise nav by dive and depth stratum for bootstrap analysis
 nav.rov.boot <- nav.rov %>% 
   group_by(dive_name,stratum) %>% 
   summarise(
     distance = sum(disp),
-    area = sum(area))
+    area = sum(area),
+    depth.min = min(abs(depth)),
+    depth.max = max(abs(depth)),
+    duration = round(as.numeric(difftime(max(date_time),min(date_time),units = "mins"))))
 
+# Summarize nav by site and stratum for tables
 nav.rov.summ <- nav.rov %>% 
-  group_by(site,stratum) %>% 
+  group_by(site, stratum) %>% 
   summarise(
     n.tx = n_distinct(dive_name),
+    depth.min = min(abs(depth)),
+    depth.max = max(abs(depth)),
     distance = sum(disp),
     survey_area = sum(area)) %>% 
+  mutate(platform = "ROV") %>% 
   arrange(site,desc(stratum))
 
 # Filter other data
@@ -253,32 +260,41 @@ if (import.data) {
   } else {
     # Configure connection to Acess database
     sub.con <- channel <- odbcConnectAccess2007(here("Data/SUB/sub_data.accdb"))    
+    # Import NAV data  
+    nav.sub <-  sqlFetch(sub.con, "tbl_Gear_Compare_Yok_nav") %>% 
+      filter(transect != 0 & segment != 0) %>% 
+      rename(lat       = latitude,
+             long      = longitude,
+             cum_dist  = cum_dist_m) %>% 
+      unite(date,year,month,day,sep = "-") %>% 
+      mutate(time      = str_extract(time,"\\d{2}:\\d{2}:\\d{2}"),
+             dive_name = paste(dive, transect, sep = "0")) %>% 
+      unite(date_time,date,time,sep = " ") %>% 
+      mutate(date_time = ymd_hms(date_time),
+             dist = c(diff(cum_dist),0)) %>% 
+      filter(dist < 5 & dist > -5)
+    
     # Import CTD data
     ctd.sub <-  sqlFetch(sub.con, "tbl_Gear_Compare_Yok_ctd") %>% 
       unite(date,year,month,day,sep = "-") %>% 
+      filter(transect != 0 & segment != 0) %>% 
       mutate(time      = str_extract(realtime,"\\d{2}:\\d{2}:\\d{2}"),
              dive_name = paste(dive, transect, sep = "0")) %>% 
       unite(date_time,date,time,sep = " ") %>% 
       mutate(date_time = ymd_hms(date_time)) %>% 
       rename(depth     = depth_m,
              oxy_conc  = Oxygen_ml_L,
-             oxy_sat   = Oxygen_percent_saturation)
-    
-    # Import NAV data  
-    nav.sub <-  sqlFetch(sub.con, "tbl_Gear_Compare_Yok_nav") %>% 
-      rename(lat       = latitude,
-             long      = longitude,
-             cum_dist  = cum_dist_m) %>% 
-      unite(date,year,month,day,sep = "-") %>% 
-      mutate(time      = str_extract(time,"\\d{2}:\\d{2}:\\d{2}"),
-             dive_name = str_sub(as.character(dv0tx0seg),1,4)) %>% 
-      unite(date_time,date,time,sep = " ") %>% 
-      mutate(date_time = ymd_hms(date_time),
-             dist = c(diff(cum_dist),0)) %>% 
-      filter(transect != 0 & segment != 0 & dist < 5 & dist > -5)
+             oxy_sat   = Oxygen_percent_saturation) %>% 
+      filter(dive_name %in% nav.sub$dive_name)
     
     # Close connection
     close(sub.con)
+    
+    # Get transect distances
+    tx.dist.sub <- counts.sub %>% 
+      select(dive_name,distance) %>% 
+      distinct() %>% 
+      arrange(dive_name)
     
     # Import density summary
     counts.sub <- read_excel(here("Data/SUB/sub_data.xlsx"),
@@ -295,7 +311,8 @@ if (import.data) {
              sciName   = str_replace(sciName,"Sebastes spp.","Sebastes sp."),
              sciName   = str_replace(sciName,"Sebastolobus spp.","Sebastolobus sp."),
              sciName   = str_replace(sciName,"Sebastes miniatus","Sebastes crocotulus")) %>%
-      left_join(select(spp, sciName, commonName))
+      left_join(select(spp, sciName, commonName)) %>% 
+      droplevels()
     
     # Get list of fishcodes and sciNames
     names.sub <- counts.sub %>% 
@@ -303,12 +320,6 @@ if (import.data) {
       distinct() %>% 
       arrange(sciName)
     
-    # Get transect distances
-    nav.sub.summ <- counts.sub %>% 
-      select(dive_name,distance) %>% 
-      distinct() %>% 
-      arrange(dive_name)
-
     # Import sub density summary
     biomass.sub <- read_excel(here("Data/SUB/sub_data.xlsx"),
                            sheet = "Yok_Sub_Biomass_step2") %>% 
@@ -322,18 +333,57 @@ if (import.data) {
              stratum = cut(depth_bin * -0.9,seq(-400,0,100))) %>% 
       left_join(names.sub) %>% 
       left_join(select(lw.data,sciName,a,b,L_max)) %>% 
-      left_join(nav.sub.summ) %>% 
+      left_join(tx.dist.sub) %>% 
       mutate(area = distance * 2.5,
              weight_g = a * length_cm^b * counts)
+    
+    # Get strata for each transect to add to CTD
+    tx.strata.sub <- biomass.sub %>% 
+      select(site, dive_name, stratum) %>% 
+      distinct() %>% 
+      arrange(dive_name)
+    
+    # Add transect info to CTD data for summarizing later
+    ctd.sub <- ctd.sub %>% 
+      left_join(tx.strata.sub)
   }
   # Save SUB data
-  save(counts.sub,biomass.sub,ctd.sub,nav.sub,file = here("Data/SUB/sub_data.Rdata"))
+  save(counts.sub,biomass.sub,ctd.sub,nav.sub,tx.dist.sub,file = here("Data/SUB/sub_data.Rdata"))
 } else {
   # Load SUB data
   load(here("Data/SUB/sub_data.Rdata"))
 }
 
-# Summarize ROV observations
+# Get min and max depth from SUB CTD
+ctd.sub.summ <- ctd.sub %>% 
+  group_by(dive_name) %>% 
+  summarise(depth.min = min(depth),
+            depth.max = max(depth))
+
+# Summarize transect duration and distance for the SUB
+tx.summ.sub <- nav.sub %>% 
+  group_by(dive_name) %>% 
+  summarise(
+    duration = as.numeric(difftime(max(date_time),min(date_time),units = "mins"))) %>% 
+  mutate(platform = "SUB") %>% 
+  left_join(tx.dist.sub)
+
+# Summarize SUB nav by site and stratum for tables
+nav.sub.summ <- biomass.sub %>%
+  select(site, stratum, dive_name, distance, area) %>% 
+  distinct() %>% 
+  left_join(ctd.sub.summ) %>%
+  group_by(site,stratum) %>%
+  summarise(
+    n.tx = n_distinct(dive_name),
+    depth.min = min(depth.min, na.rm = T),
+    depth.max = max(depth.max, na.rm = T),
+    distance = sum(distance),
+    survey_area = sum(area)) %>%
+  mutate(platform = "SUB") %>% 
+  arrange(site,desc(stratum))
+
+# Summarize SUB observations
 obs.sub.summ <- counts.sub %>% 
   group_by(sciName, commonName) %>% 
   summarise(nSUB = sum(counts)) %>% 
@@ -359,38 +409,34 @@ write_csv(boot.data.sub,here("Output/boot_data_sub.csv"))
 ```
 
 ```{r ImportAUV}
-boot.data.all <- bind_rows(boot.data.rov, boot.data.sub)
 
-boot.data.summ <- boot.data.all %>% 
+```
+
+```{r CombineBootstrapData}
+# Combine data from all vehicles for the bootstrap analysis
+boot.data.all <- bind_rows(boot.data.rov, boot.data.sub) # Add AUV data
+
+# Summarize observatiosn from each vehicle for tabular output
+obs.summ.all <- boot.data.all %>% 
   group_by(sciName, platform) %>% 
   summarize(counts = sum(counts)) %>% 
   spread(platform,counts) %>% 
   mutate(ALL = sum(ROV,SUB,na.rm = T)) %>% 
   arrange(desc(ALL))
 
-write.csv(boot.data.summ,file = here("Output/obs_summ.csv"), row.names = F, quote = F, na = "-")
-
-tx.rov <- n_distinct(nav.rov$dive_name)
-dist.rov <- sum(nav.rov$disp)/1000
-area.rov <- sum(nav.rov$area)/1000
-
-tx.sub <- n_distinct(nav.sub$dive_name)
-dist.sub <- sum(nav.sub$dist)/1000
-area.sub <- dist.sub * 2.5
-
-# nav.summ.sub <- nav.sub %>% 
-#   group_by(site) %>% 
-#   summarize(transects = n_distinct(dive_name))
+# Write to CSV
+write.csv(obs.summ.all,file = here("Output/obs_summ.csv"), row.names = F, quote = F, na = "-")
 ```
 
-```{r MapNav,eval=F}
+```{r CreateSiteMap}
 # rnaturalearth vignette
 # https://cran.r-project.org/web/packages/rnaturalearth/vignettes/rnaturalearth.html
 
 # Get land features
 if (get.sf) {
   # Download highres polygons for N. America
-  na_sf <- ne_countries(type = 'countries', scale = 'large',returnclass = "sf")
+  na_sf <- ne_countries(type = 'countries', scale = 'large', returnclass = "sf") %>% 
+    filter(subregion %in% c("Northern America") & admin %in% c("United States of America","Canada"))
   # Save sf objects
   save(na_sf,file = here("Data/GIS/na_sf.Rdata"))
 } else {
@@ -398,45 +444,62 @@ if (get.sf) {
   load(here("Data/GIS/na_sf.Rdata"))
 }
 
-# Read shapefiles
-sample_frame <- st_read(here("Data/GIS/sampling_frame.shp"))
-depth_strata <- st_read(here("Data/GIS/depth_polygons.shp"))
-depth_contours <- st_read(here("Data/GIS/depth_contours.shp"))
-nav.auv <-st_read(here("Data/GIS/auv_nav_lines.shp"))
-
-# Read rasters
-
-# Map ROV tracks
-survey.map <- ggplot(depth_strata) + geom_sf(aes(fill = stratum_z),alpha = 0.75) +
-  geom_sf(data = depth_contours, colour = "black", size = 1) + 
-  geom_sf(data = sample_frame, colour = "red", size = 2, fill = NA,linetype = "dashed") + 
-  geom_path(data = nav.rov, aes(long,lat, group = dive_name), colour = "black", size = 1.5) +
-  geom_path(data = nav.sub, aes(long,lat, group = dive_name), colour = "green", size = 1.5) +
-  geom_sf(data = nav.auv, colour = "orange", size = 1) +
-  scale_fill_manual(name = "Depth", values = c("white","lightblue1","royalblue","royalblue4")) +
-  theme_bw() +
-  xlab("Longitude") + ylab("Latitude") +
-  xlim(-119.525, -119.435) + ylim(33.915, 33.97)
-
-ggsave(survey.map, file = here("Figs/fig_site_map.png"),
-       height = 12, width = 12)
-
-# Change gridline colors
-
 if (save.figs) {
-  rov_counts <- ggplot(nav.rov,aes(long,lat,group = dive_name)) + geom_path() +  
-    geom_point(data = obs.rov,aes(long,lat,size = counts)) + 
-    facet_wrap(~sciName) +
-    coord_sf() + 
-    theme_bw()  
-  ggsave(rov_counts,filename = here("Figs/fig_rov_counts.png"),height = 15, width = 15)
+  # Read bathy and hillshade rasters
+  # https://nrelscience.org/2013/05/30/this-is-how-i-did-it-mapping-in-r-with-ggplot2/
+  bathy <- raster(here("Data/GIS/bathy_wgs84.tif")) %>% 
+    rasterToPoints() %>% 
+    as.data.frame() %>% 
+    rename(long = x,
+           lat = y,
+           depth = bathy_wgs84)
+  
+  hill <- raster(here("Data/GIS/hill_wgs84.tif")) %>% 
+    rasterToPoints() %>% 
+    as.data.frame() %>% 
+    rename(long = x,
+           lat = y,
+           hill = hill_wgs84)
+  
+  # Read shapefiles
+  sample_frame   <- st_read(here("Data/GIS/sampling_frame.shp"))
+  depth_strata   <- st_read(here("Data/GIS/depth_polygons.shp"))
+  depth_contours <- st_read(here("Data/GIS/depth_contours.shp"))
+  nav.auv        <- st_read(here("Data/GIS/auv_nav_lines.shp"))
+  grid.auv       <- st_read(here("Data/GIS/auv_fishnet.shp"))
+  bank_labels    <- read_csv(here("Data/GIS/bank_labels.csv"))
+  
+  # Map ROV tracks
+  survey.map <- ggplot() +
+    geom_raster(data = hill, aes(long, lat, alpha = hill), show.legend = F) +
+    geom_sf(data = depth_strata, aes(fill = stratum_z), alpha = 0.5) +
+    geom_sf(data = depth_contours, colour = "gray20", size = 1) + 
+    geom_sf(data = grid.auv, fill = NA) +
+    geom_sf(data = sample_frame, colour = "black", size = 1.5, fill = NA, linetype = "dashed") + 
+    geom_shadowtext(data = bank_labels, aes(long, lat, label = label), 
+                    size = 5, fontface = "bold", color = "black", bg.color = "white") +
+    geom_path(data = nav.rov, aes(long,lat, group = dive_name), colour = "black",  size = 0.5) +
+    geom_path(data = nav.sub, aes(long,lat, group = dive_name), colour = "green", size = 0.5) +
+    geom_sf(data = nav.auv, colour = "orange", size = 0.5) +
+    scale_alpha(range = c(1, 0.1)) +
+    scale_fill_manual(name = "Depth", values = c("white","lightblue1","royalblue","royalblue4")) +
+    xlab("\nLongitude") + ylab("Latitude\n") +
+    coord_sf(xlim = c(-119.525, -119.435), ylim = c(33.915, 33.97)) +
+    theme_bw() +
+    theme(axis.text.x = element_text(size = 11),
+          axis.text.y = element_text(size = 11, angle = 90, hjust = 0.5),
+          axis.title.x = element_text(size = 16),
+          axis.title.y = element_text(size = 16),
+          panel.grid.major = element_line(colour = "white"))
+  
+  # Save site map
+  ggsave(survey.map, file = here("Figs/fig_survey_map.png"),
+         height = 10, width = 12)
 }
 ```  
 
 ```{r ROV_bootstrap}
 # Bootstrap ROV abundance and biomass by strata
-B = 1000
-
 if (do.boot) {
   # i = "Sebastes levis"
   # j = "The Footprint"
@@ -450,13 +513,13 @@ if (do.boot) {
         if (nrow(boot.data) > 0) {
           boot.abund <- NA_real_
           boot.biom  <- NA_real_
-          for (ii in seq(1:B)) {
+          for (ii in seq(1:n.boot)) {
             boot.abund[ii] <- mean(sample(boot.data$abund,nrow(boot.data),replace = T))
             boot.biom[ii]  <- mean(sample(boot.data$biom,nrow(boot.data),replace = T))/1000 # Biomass (kg)
           }
           boot.df.rov <- rbind(boot.df.rov,
                                data.frame(platform = "ROV", sciName = i, site = j, 
-                                          stratum = k, sample = seq(1,B),
+                                          stratum = k, sample = seq(1,n.boot),
                                           boot.abund, boot.biom))
         }
       }
@@ -467,7 +530,7 @@ if (do.boot) {
 } else {
   load(here("Output/boot_results_rov.Rdata"))
 }
-# Summarise ROV results
+# Summarise ROV results by stratum
 boot.summ.stratum.rov <- boot.df.rov %>% 
   group_by(platform,sciName,site,stratum) %>% 
   summarise(
@@ -481,15 +544,14 @@ boot.summ.stratum.rov <- boot.df.rov %>%
     biom.ci.low  = quantile(boot.biom, 0.025),
     biom.ci.hi   = quantile(boot.biom, 0.975))
 
-# ggplot(boot.df.rov, aes(boot.abund, fill = stratum)) +
-#   geom_density(alpha = 0.5) + facet_wrap(~sciName, scales = "free") + theme_bw()
-
+# Calculate ROV biomass and abundance across all strata
 boot.samples.rov <- boot.df.rov %>% 
   group_by(platform,sciName,site,sample) %>% 
   summarise(
     boot.abund = sum(boot.abund),
     boot.biom = sum(boot.biom))
 
+# Summarise ROV biomass and abundance across all strata
 boot.summ.sample.rov <- boot.samples.rov %>% 
   group_by(platform,sciName,site) %>% 
   summarise(
@@ -503,15 +565,12 @@ boot.summ.sample.rov <- boot.samples.rov %>%
     biom.ci.low  = quantile(boot.biom, 0.025),
     biom.ci.hi   = quantile(boot.biom, 0.975)) %>% 
   arrange(sciName, site)
-
-# ggplot(boot.samples.rov, aes(boot.abund, fill = site)) +
-#   geom_density(alpha = 0.5) + facet_wrap(~sciName, scales = "free") + theme_bw()
 ```
 
 ```{r SUB_bootstrap}
 if (do.boot) {
-  # Bootstrap ROV abundance and biomass by strata
-  B = 1000
+  # Bootstrap SUB abundance and biomass by strata
+
   # Create data frame for storing results
   boot.df.sub <- data.frame()
   
@@ -522,13 +581,13 @@ if (do.boot) {
         if (nrow(boot.data) > 0) {
           boot.abund <- NA_real_
           boot.biom  <- NA_real_
-          for (ii in seq(1:B)) {
+          for (ii in seq(1:n.boot)) {
             boot.abund[ii] <- mean(sample(boot.data$abund,nrow(boot.data),replace = T))
             boot.biom[ii]  <- mean(sample(boot.data$biom,nrow(boot.data),replace = T))/1000 # Biomass (kg)
           }
           boot.df.sub <- rbind(boot.df.sub,
                                data.frame(platform = "SUB", sciName = i, site = j, 
-                                          stratum = k, sample = seq(1,B),
+                                          stratum = k, sample = seq(1,n.boot),
                                           boot.abund, boot.biom))
         }
       }
@@ -539,7 +598,7 @@ if (do.boot) {
 } else {
   load(here("Output/boot_results_sub.Rdata"))
 }
-# Summarise ROV results
+# Summarise SUB results by stratum
 boot.summ.stratum.sub <- boot.df.sub %>% 
   group_by(platform,sciName,site,stratum) %>% 
   summarise(
@@ -553,15 +612,14 @@ boot.summ.stratum.sub <- boot.df.sub %>%
     biom.ci.low  = quantile(boot.biom, 0.025),
     biom.ci.hi   = quantile(boot.biom, 0.975))
 
-# ggplot(boot.df.rov, aes(boot.abund, fill = stratum)) +
-#   geom_density(alpha = 0.5) + facet_wrap(~sciName, scales = "free") + theme_bw()
-
+# Calculate SUB biomass and abundance across all strata
 boot.samples.sub <- boot.df.sub %>% 
   group_by(platform,sciName,site,sample) %>% 
   summarise(
     boot.abund = sum(boot.abund),
     boot.biom = sum(boot.biom))
 
+# Summarise SUB biomass and abundance across all strata
 boot.summ.sample.sub <- boot.samples.sub %>% 
   group_by(platform,sciName,site) %>% 
   summarise(
@@ -574,9 +632,6 @@ boot.summ.sample.sub <- boot.samples.sub %>%
     biom.cv      = sd(boot.biom)/biom.mean * 100,
     biom.ci.low  = quantile(boot.biom, 0.025),
     biom.ci.hi   = quantile(boot.biom, 0.975))
-
-# ggplot(boot.samples.rov, aes(boot.abund, fill = site)) +
-#   geom_density(alpha = 0.5) + facet_wrap(~sciName, scales = "free") + theme_bw()
 ```
 
 ```{r AUV_bootstrap,eval = T}
@@ -666,14 +721,10 @@ raster.both.select <- plot_grid(raster.abundance.select, raster.biomass.select, 
 ggsave(raster.both.select, filename = here("Figs/fig_raster_both_select.png"),height = 4, width = 10)
 ```
 
-```{r ALL_bootstrap}
+```{r ALL_bootstrap_samples}
 boot.samples.all <- bind_rows(boot.samples.rov, boot.samples.sub) %>% 
   ungroup() %>% 
   mutate(sciName = str_replace(sciName,"Sebastes miniatus","Sebastes crocotulus"))
-
-# ggplot(boot.samples.all, aes(boot.abund)) + geom_histogram(aes(fill = platform), alpha = 0.5) +
-#   facet_wrap(~sciName, scales = "free") + 
-#   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() 
 
 # Footprint data
 boot.abund.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% main.spp & site == "The Footprint"), aes(boot.abund)) + 
@@ -762,6 +813,74 @@ boot.dens.plot.all <- plot_grid(boot.abund.dens.plot,boot.biom.dens.plot, ncol =
 ggsave(boot.dens.plot.all, filename = here("Figs/fig_density_both_piggy.png"), height = 5, width = 15)
 ```
 
+```{r SampleSummary}
+sample.summ <- boot.data.all %>% 
+  select(platform, site, stratum, dive_name, distance, area) %>% 
+  distinct() %>% 
+  group_by(platform, site, stratum) %>% 
+  summarise(
+    n_samples = n(),
+    distance  = sum(distance)/1000,
+    area      = sum(area)*1e-6) %>% 
+  mutate(
+    stratum.name = case_when(
+      stratum == "(-100,0]" ~ "<100 m",
+      stratum == "(-200,-100]" ~ "100-200 m",
+      stratum == "(-300,-200]" ~ "200-300 m",
+      stratum == "(-400,-300]" ~ "300-400 m",
+      TRUE ~ "All")) %>% 
+  select(Vehicle = platform, Site = site, Stratum = stratum.name, 
+         Samples = n_samples, Distance = distance, Area = area)
+
+# Summarize transect duration and distance for the ROV
+tx.summ.rov <- nav.rov %>% 
+  group_by(dive_name) %>% 
+  summarise(
+    distance = sum(disp),
+    duration = as.numeric(difftime(max(date_time),min(date_time),units = "mins"))) %>% 
+  mutate(platform = "ROV")
+  
+# Site totals of transects, distance, area and depth range for each vehicle
+tx.summ.site <- nav.rov.summ %>%
+  bind_rows(nav.sub.summ) %>% 
+  # bind_rows(nav.auv.summ) %>% 
+  group_by(platform,site) %>% 
+  summarise(n = sum(n.tx),
+            D = sum(distance)/1000,
+            A = sum(survey_area)*1e-6,
+            depth.min = min(depth.min),
+            depth.max = max(depth.max))
+
+# Site totals of transects, distance, area and depth range for each vehicle
+tx.summ.all <- tx.summ.site %>%
+  group_by(platform) %>% 
+  summarise(n = sum(n),
+            D = sum(D),
+            A = sum(A),
+            depth.min = min(depth.min),
+            depth.max = max(depth.max))
+```
+
+```{r ObsSummary}
+# Combine summaries from each vehicle
+obs.all.summ <- obs.rov.summ %>%
+  left_join(obs.sub.summ) %>% 
+  replace_na(list(nROV = 0, nSUB = 0)) %>% 
+  # left_join(obs.auv.summ) %>% 
+  mutate(nGrand = nROV + nSUB) %>% 
+  mutate(pctGrand = nGrand/sum(.$nGrand)*100) %>% 
+  arrange(desc(pctGrand), sciName) %>% 
+  rename(
+      "Scientific name" = sciName,
+      "Common name"     = commonName,
+      "$N_R$"             = nROV,
+      "$\\%_R$"           = pctROV,
+      "$N_S$"             = nSUB,
+      "$\\%_S$"           = pctSUB,
+      "$N_G$"             = nGrand,
+      "$\\%_G$"           = pctGrand)
+
+```
 
 **Estimates of groundfish biomass, abundance, and diversity using different optical sampling methods** 
 
@@ -840,18 +959,16 @@ The abundance and biomass of observed fishes was calculated using the area of ea
 Primary and secondary geologic seabed characteristics were described at the beginning of the transect, at the time of each fish observation, and also at any transition between different seabed types, allowing for the description of associations between each species and different seabed types and also the estimation of area searched within each seabed type. Both the primary (>50% of the seabed within the strip area) and secondary (20-50% of the seabed within the strip area) seabed characteristics were described. Seabed classifications generally followed the classification scheme of Greene et al. [-@Greene1999], and were based on particle size: mud (clay to silt; <0.06 mm), sand (0.06-2 mm), pebble (2-64 mm), cobble (64-256 mm), boulder (0.25-3 m), low-complexity (<0.25 m pavement) reef, and highcomplexity (>0.25 m) reef. The term "complexity" refers to the presence and the size of cracks and crevices in the seabed that may provide refuge to rockfishes. Based on the size and shape of these features, low-complexity and high-complexity reef probably serve the same ecological function as sand/pebble and cobble/boulder, respectively. The area of each substratum type in a transect was estimated as the product of the transect width and the distance between seabed types for the SUB and ROV, or as the total area of images containing similar seabed types for the AUV.  
 
 ## Population estimation
-For each species, abundance (_N_) and biomass (_M_) was estimated using the strip transect sampling method [@Buckland2001]. For each sample (_i_, transect or grid), numeric density (_d~N~_) was calculated as: $d_{N_i} = n_i/a_i$, where _n_ is the number of individuals observed and _a_ is the sample area. Abundance within each stratum (_j_) was then calculated as: $N_j = d_{N_i} * A_j$, where _A_ is the stratum area. For each sample, biomass density (_d~M~_) was also calculated as: $d_{M_i} = (m_i * n_i) / A_i$, where _m_ is the total biomass of individuals observed in the sample, calculated as the sum of individual biomasses estimated from total length using published length-to-weight relationships (see **Table 1**). Biomass within each stratum was then calculated as: $M_j = d_{M_i} * A_j$. Biomasses for fish assigned to 10-cm length bins from ROV surveys, the midpoint of the size class was used to estimate biomass (e.g., 5 cm for the 0-10 cm class). For species where the length-to-weight relationship was unknown (e.g., dwarf-red rockfish, _S. rufinanus_; rosethorn rockfish, _S. simulator_; and pygmy rockfish, _S. wilsoni_), coefficients for closely related species were used [see @Hyde2007]. Coefficients for vermilion rockfish (_S. miniatus_) were used for sunset rockfish [_S. crocotulus_; @Hyde2008a]. Since many of the unidentified rockfishes were of the semi-pelagic, aggregating variety, coefficients were used from squarespot rockfishes (_S. hopkinsi_, the most commonly identified species in this study with similar behavior and vertical distribution). For unidentified rosy-group rockfishes (_Sebastomus sp._), coefficients were used from swordspine rockfish (_S. ensifer_, the most commonly identified _Sebastomus_ species observed in this study). Mean, CV of the mean, and 95%-quantile confidence intervals for abundance and biomass were estimated using a non-parametric bootstrap of `r B` samples [@Efron1993].  
+For each species, abundance (_N_) and biomass (_M_) was estimated using the strip transect sampling method [@Buckland2001]. For each sample (_i_, transect or grid), numeric density (_d~N~_) was calculated as: $d_{N_i} = n_i/a_i$, where _n_ is the number of individuals observed and _a_ is the sample area. Abundance within each stratum (_j_) was then calculated as: $N_j = d_{N_i} * A_j$, where _A_ is the stratum area. For each sample, biomass density (_d~M~_) was also calculated as: $d_{M_i} = (m_i * n_i) / A_i$, where _m_ is the total biomass of individuals observed in the sample, calculated as the sum of individual biomasses estimated from total length using published length-to-weight relationships (see **Table 1**). Biomass within each stratum was then calculated as: $M_j = d_{M_i} * A_j$. Biomasses for fish assigned to 10-cm length bins from ROV surveys, the midpoint of the size class was used to estimate biomass (e.g., 5 cm for the 0-10 cm class). For species where the length-to-weight relationship was unknown (e.g., dwarf-red rockfish, _S. rufinanus_; rosethorn rockfish, _S. simulator_; and pygmy rockfish, _S. wilsoni_), coefficients for closely related species were used [see @Hyde2007]. Coefficients for vermilion rockfish (_S. miniatus_) were used for sunset rockfish [_S. crocotulus_; @Hyde2008a]. Since many of the unidentified rockfishes were of the semi-pelagic, aggregating variety, coefficients were used from squarespot rockfishes (_S. hopkinsi_, the most commonly identified species in this study with similar behavior and vertical distribution). For unidentified rosy-group rockfishes (_Sebastomus sp._), coefficients were used from swordspine rockfish (_S. ensifer_, the most commonly identified _Sebastomus_ species observed in this study). Mean, CV of the mean, and 95%-quantile confidence intervals for abundance and biomass were estimated using a non-parametric bootstrap of `r n.boot` samples [@Efron1993].  
 
 ## Biodiversity estimates  
 **[ROV]** Species richness ($S$); species diversity (Shannon $H’$), and Simpson's lambda ($\lambda$) were computed for each transect and then summarized within each depth stratum and at each bank. The expected species richness (rarefaction) in a particular sample from that stratum was estimated and arefaction curves were generated for each bank using the. All biodiversity estimates were generated using the _vegan_ package [@Oksanen2012] in R [@RCoreTeam2017].  
 
 # Results  
 ## Survey effort  
-**(Table 2)**.  
+Using the SUB, a total of `r tx.summ.all$n[tx.summ.all$platform == "SUB"]` transects were conducted between `r round(tx.summ.all$depth.min[tx.summ.all$platform == "SUB"],0)` and `r round(tx.summ.all$depth.max[tx.summ.all$platform == "SUB"],0)` m on The Footprint (n = `r tx.summ.site$n[tx.summ.site$platform == "SUB" & tx.summ.site$site == "The Footprint"]` transects) and Piggy Bank (n = `r tx.summ.site$n[tx.summ.site$platform == "SUB" & tx.summ.site$site == "Piggy Bank"]` transects) covering a total distance of `r sprintf("%.1f",tx.summ.all$D[tx.summ.all$platform == "SUB"])` km and a total area of `r sprintf("%.4f",tx.summ.all$A[tx.summ.all$platform == "SUB"])` km^2^ (**Table 2**). Mean transect length was `r sprintf("%.0f",mean(tx.summ.sub$distance))` m (SE = `r sprintf("%.0f",sd(tx.summ.sub$distance)/sqrt(nrow(tx.summ.sub)))` m). Transect duration ranged from `r sprintf("%.0f",min(tx.summ.sub$duration))` to `r sprintf("%.0f",max(tx.summ.sub$duration))` min (mean = `r sprintf("%.0f",mean(tx.summ.sub$duration))` min, SE = `r sprintf("%.1f",sd(tx.summ.sub$duration)/sqrt(nrow(tx.summ.sub)))` min). 
 
-**[SUB]** A total of `69` transects were conducted between `95`-`400` m during `17` dives on Footprint (n = `55` transects) and Piggy Bank (n = `14` transects) covering a total distance of `52000` m^2^ (total area = `0.05` km^2^) (**Table X**; **Figure X**). Mean transect length was `294` m (SE = `8` m). Dive duration ranged from 1.4 to `3.2` h (mean = `2.3` h, SE = `0.1` h).  
-
-**[ROV]** A total of `r 37` transects were surveyed from ~`r 90` to `r 390` m. The majority of transects were conducted between the depths of 100 to 300 m on the Footprint, and from 200 to 300 m on Piggy Bank (**Table 2**, **Fig. 1**). The transect length ranged from ~`r 300` to `r 1300` m (mean = `r  "X"` m, SD = `r "SD"`), area ranged from (mean = `r  "X"` m^2^, SD = `r "SD"`), and duration ranged from ` r20` to `r 140` min (mean = `r  "X"` min, SD = `r "SD"`). The average transect width was `r 2.97` (SD = `r 1.34`). Due to technical problems with the ROV, inclement weather, or both, the ROV portion of this comparative survey had to be completed in several “legs” spanning several months between September and December. **Calculate new estimates of area using method of Stierhoff et al. 2016.**  
+Using the ROV, a total of `r tx.summ.all$n[tx.summ.all$platform == "ROV"]` transects were conducted between `r round(tx.summ.all$depth.min[tx.summ.all$platform == "ROV"],0)` and `r round(tx.summ.all$depth.max[tx.summ.all$platform == "ROV"],0)` m on The Footprint (n = `r tx.summ.site$n[tx.summ.site$platform == "ROV" & tx.summ.site$site == "The Footprint"]` transects) and Piggy Bank (n = `r tx.summ.site$n[tx.summ.site$platform == "ROV" & tx.summ.site$site == "Piggy Bank"]` transects) covering a total distance of `r sprintf("%.1f",tx.summ.all$D[tx.summ.all$platform == "ROV"])` km and a total area of `r sprintf("%.4f",tx.summ.all$A[tx.summ.all$platform == "ROV"])` km^2^ (**Table 2**). Mean transect length was `r sprintf("%.0f",mean(tx.summ.rov$distance))` m (SE = `r sprintf("%.0f",sd(tx.summ.rov$distance)/sqrt(nrow(tx.summ.rov)))` m). Transect duration ranged from `r sprintf("%.0f",min(tx.summ.rov$duration))` to `r sprintf("%.0f",max(tx.summ.rov$duration))` min (mean = `r sprintf("%.0f",mean(tx.summ.rov$duration))` min, SE = `r sprintf("%.1f",sd(tx.summ.rov$duration)/sqrt(nrow(tx.summ.rov)))` min). 
 
 **[AUV]** `Twenty-seven` cells were sampled throughout the survey area covering a total of `70,006` m^2^ and ranging in depth from `99` to `487` m: `13` on The Footprint, `six` on the flank of Footprint, and `eight` on Piggy Bank (**Table X**, **Figure X**).  `Seventeen` of the `27` cells were entirely within one 100-m depth stratum, while `ten` cells spanned two 100 m strata. The range of depths surveyed within a cell varied from 10 m to 83 m. Habitats encountered ranged from high-relief rock ridge to mud/sand bottom (**Figure x**). 
 
@@ -966,26 +1083,7 @@ if (doc.type == "docx") {
 
 **Table 2** Number of samples, sampling distance (km), and sampling area (km^2^) for each vehicle, site, and depth stratum ("All" if sampling not stratified by depth; e.g., AUV).
 
-```{r EffortSummary}
-sample.summ <- boot.data.all %>% 
-  select(platform, site, stratum, dive_name, distance, area) %>% 
-  distinct() %>% 
-  group_by(platform, site, stratum) %>% 
-  summarise(
-    n_samples = n(),
-    distance  = sum(distance)/1000,
-    area      = sum(area)*1e-6) %>% 
-  mutate(
-    stratum.name = case_when(
-      stratum == "(-100,0]" ~ "<100 m",
-      stratum == "(-200,-100]" ~ "100-200 m",
-      stratum == "(-300,-200]" ~ "200-300 m",
-      stratum == "(-400,-300]" ~ "300-400 m",
-      TRUE ~ "All")) %>% 
-  select(Vehicle = platform, Site = site, Stratum = stratum.name, 
-         Samples = n_samples, Distance = distance, Area = area)
-
-
+```{r SampleSummaryTable}
 # Format and print table of observations
 if (doc.type == "docx") {
   sample.summ %>% 
@@ -1009,25 +1107,7 @@ if (doc.type == "docx") {
 
 **Table 3.** Summary of observations from the ROV, SUB, AUV (**to be added later**), and All vehicles. **Data are presently sorted descending by % of all observations. We can sort by species name if preferred.**  
 
-```{r ObsSummary}
-# Combine summaries from each vehicle
-obs.all.summ <- obs.rov.summ %>%
-  left_join(obs.sub.summ) %>% 
-  replace_na(list(nROV = 0, nSUB = 0)) %>% 
-  # left_join(obs.auv.summ) %>% 
-  mutate(nGrand = nROV + nSUB) %>% 
-  mutate(pctGrand = nGrand/sum(.$nGrand)*100) %>% 
-  arrange(desc(pctGrand), sciName) %>% 
-  rename(
-      "Scientific name" = sciName,
-      "Common name"     = commonName,
-      "$N_R$"             = nROV,
-      "$\\%_R$"           = pctROV,
-      "$N_S$"             = nSUB,
-      "$\\%_S$"           = pctSUB,
-      "$N_G$"             = nGrand,
-      "$\\%_G$"           = pctGrand)
-
+```{r ObsSummaryTable}
 # Format and print table of observations
 if (doc.type == "docx") {
   obs.all.summ %>% 
@@ -1168,23 +1248,15 @@ if (doc.type == "docx") {
 
 ```
 
-\newpage  
+\newpage 
 
 # Figures  
 
-```{r SurveyDomain,fig.align='center',out.width='6in'}
-include_graphics(here("Figs/fig_AUV_survey_design.png"))
+```{r SurveyDomain,fig.align='center',out.width='7in'}
+include_graphics(here("Figs/fig_survey_map.png"))
 ```  
 
-**Figure 1. [MAKING NEW]** Map of the survey area indicating the extent of the sampling area, which includes The Footprint and Piggy Bank (dashed yellow box), depth strata (blue polygons), and the 250 x 250 m grid used to randomly select AUV sample locations.  
-
-\newpage
-
-```{r AUVSamplingDesign,fig.align='center',out.width='6in'}
-include_graphics(here("Figs/fig_ROV_survey_design.png"))
-```  
-
-**Figure 2. [MAKING NEW]** Location of SUB, ROV, and AUV samples at The Footprint and Piggy Bank. [symbolize transects by platform type; include depth strata a AUV grid]
+**Figure 1.** Map of the survey area at The Footprint and Piggy Bank, indicating the extent of the sampling area (dashed box), depth strata sampled by the ROV and SUB (blue polygons), the 250 x 250 m grid sampled by the AUV, and transect locations (colored lines; blue = ROV, green = SUB, and orange = AUV). **NOTE: I created a fictitious fishnet for the AUV until I am provided the actual shapefile used to plan the survey.**
 
 \newpage
 
@@ -1192,7 +1264,7 @@ include_graphics(here("Figs/fig_ROV_survey_design.png"))
 include_graphics(here("Figs/fig_raster_both_all.png"))
 ```  
 
-**Figure 3.** Mean abundance (_N_; left), biomass (_M_, kg; right), and coefficient of variation (CV, %; fill color) of all species encountered by at least one vehicle and across all sampling strata. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).
+**Figure 2.** Mean abundance (_N_; left), biomass (_M_, kg; right), and coefficient of variation (CV, %; fill color) of all species encountered by at least one vehicle and across all sampling strata. Estimates were produced using bootstrap resampling (n = `r n.boot` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).
 
 \newpage
 
@@ -1200,7 +1272,7 @@ include_graphics(here("Figs/fig_raster_both_all.png"))
 include_graphics(here("Figs/fig_raster_both_select.png"))
 ```  
 
-**Figure 4.** Mean abundance (_N_; left), biomass (_M_, kg; right), and coefficient of variation (CV, %; fill color) of select species across all sampling strata. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).  
+**Figure 3.** Mean abundance (_N_; left), biomass (_M_, kg; right), and coefficient of variation (CV, %; fill color) of select species across all sampling strata. Estimates were produced using bootstrap resampling (n = `r n.boot` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV).  
 
 \newpage
 \blandscape
@@ -1209,7 +1281,7 @@ include_graphics(here("Figs/fig_raster_both_select.png"))
 include_graphics(here("Figs/fig_density_both_footprint.png"))
 ```  
 
-**Figure 5.**  Distribution of mean abundance (_N_; top) and biomass (_M_, kg; bottom) estimates of select species at The Footprint. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV). **[selected these species for exploration; can add/remove very easily, but chose these particulary interesting species initially]**
+**Figure 4.**  Distribution of mean abundance (_N_; top) and biomass (_M_, kg; bottom) estimates of select species at The Footprint. Estimates were produced using bootstrap resampling (n = `r n.boot` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV). **[selected these species for exploration; can add/remove very easily, but chose these particulary interesting species initially]**
 
 \newpage
 
@@ -1217,6 +1289,6 @@ include_graphics(here("Figs/fig_density_both_footprint.png"))
 include_graphics(here("Figs/fig_density_both_piggy.png"))
 ```  
 
-**Figure 6.** Distribution of mean abundance (_N_; top) and biomass (_M_, kg; bottom) estimates of select species at Piggy Bank. Estimates were produced using bootstrap resampling (n = `r B` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV). **[selected these species for exploration as above; however, not all of the species in The Footprint figure were observed at Piggy Bank]**
+**Figure 5.** Distribution of mean abundance (_N_; top) and biomass (_M_, kg; bottom) estimates of select species at Piggy Bank. Estimates were produced using bootstrap resampling (n = `r n.boot` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV). **[selected these species for exploration as above; however, not all of the species in The Footprint figure were observed at Piggy Bank]**
 
 \elandscape
