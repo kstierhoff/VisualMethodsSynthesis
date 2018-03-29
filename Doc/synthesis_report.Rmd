@@ -60,16 +60,22 @@ if (doc.type == "latex") {
 
 # processing instructions (TRUE/FALSE)
 import.data <- F # Download data from SQL database
-sub.source  <- "Access" # Or DSN if getting from database directly
 save.figs   <- F # Draw plots and maps, or use existing
 do.boot     <- F # Conduct bootstrap resampling
 get.sf      <- F # Download costline data
 n.boot      <- 1000 # Number of bootstrap samples
 
+# Data sources
+sub.source  <- "Access" # Or DSN if getting from database directly
+
 # Set plotting preferences
 rov.colour = "yellow"
 sub.colour = "blue"
 auv.colour = "green"
+
+# Define list of select species of interest
+main.spp <- c("Sebastes paucispinis", "Sebastes levis","Sebastes chlorostictus","Ophiodon elongatus",
+              "Sebastes crocotulus","Sebastes rufus")
 
 # Set figure dimensions
 fig.width  = 5
@@ -442,26 +448,60 @@ lw.data.sub <- lengths.sub[rep(row.names(lengths.sub),lengths.sub$counts), ] %>%
 
 ```
 
-```{r LengthWeightHistogram,eval=F}
+```{r ObsSummary}
+# Combine summaries from each vehicle
+obs.all.summ <- obs.rov.summ %>%
+  left_join(obs.sub.summ) %>% 
+  replace_na(list(nROV = 0, nSUB = 0)) %>% 
+  # left_join(obs.auv.summ) %>% 
+  mutate(nGrand = nROV + nSUB) %>% 
+  mutate(pctGrand = nGrand/sum(.$nGrand)*100) %>% 
+  arrange(desc(pctGrand), sciName) 
+
+# Get a list of species
+comp.spp <- obs.all.summ %>% 
+ filter(nGrand > 20 & !sciName %in% c("Sebastes sp.","Sebastomus sp.","Sebastolobus sp.","Merluccius productus"))
+```
+
+```{r LengthWeightHistogram}
 # Combine all L/W data
 lw.data.all <- lw.data.rov %>% 
   bind_rows(lw.data.sub)
 
 # Length histogram for all species
-lw.hist.all <- ggplot(lw.data.all, aes(length_cm, fill = platform)) +
+lw.hist.all <- ggplot(filter(lw.data.all, sciName %in% comp.spp$sciName), aes(length_cm, fill = platform)) +
   geom_histogram(breaks = seq(0,70,10),colour = "white",alpha = 0.5) +
-  scale_fill_manual(name = "Vehicle\n", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
-  facet_wrap(~sciName, scales = "free_y") +
+  scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  facet_wrap(~sciName, scales = "free_y", ncol = 5) +
   theme_bw() +
   theme(strip.text.x = element_text(face = "bold.italic"),
-        strip.background.x = element_blank()) +
-  xlab("\nTotal length (cm)") + ylab("Frequency")
+        strip.background.x = element_blank(),
+        legend.position = c(1,1),
+        legend.justification = c(1,1),
+        legend.background = element_blank()) +
+  xlab("\nTotal length (cm)") + ylab("Frequency\n")
 
 # Save figure
 ggsave(lw.hist.all, filename = here("Figs/fig_histogram_length_comp.png"),
-       height = 12, width = 15)
-```
+       height = 10, width = 10)
 
+# Length histogram for select species
+lw.hist.select <- ggplot(filter(lw.data.all, sciName %in% main.spp), aes(length_cm, fill = platform)) +
+  geom_histogram(breaks = seq(0,70,10),colour = "white",alpha = 0.5) +
+  scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  facet_wrap(~sciName, scales = "free_y", ncol = 2) +
+  theme_bw() +
+  theme(strip.text.x = element_text(face = "bold.italic"),
+        strip.background.x = element_blank(),
+        legend.position = c(1,1),
+        legend.justification = c(1,1),
+        legend.background = element_blank()) +
+  xlab("\nTotal length (cm)") + ylab("Frequency\n")
+
+# Save figure
+ggsave(lw.hist.select, filename = here("Figs/fig_histogram_length_comp_select.png"),
+       height = 10, width = 7)
+```
 
 ```{r CombineBootstrapData}
 # Combine data from all vehicles for the bootstrap analysis
@@ -698,9 +738,6 @@ boot.summ.sample.all <- bind_rows(boot.summ.sample.rov,boot.summ.sample.sub) %>%
          sciName = str_replace(sciName,"Sebastes miniatus","Sebastes crocotulus")) %>% 
   left_join(site.area) 
 
-main.spp <- c("Sebastes paucispinis", "Sebastes levis","Sebastes chlorostictus","Ophiodon elongatus",
-              "Sebastes crocotulus","Sebastes rufus")
-
 raster.biomass.all <- ggplot(boot.summ.sample.all, aes(factor(sciName),platform)) + geom_raster(aes(fill = biom.cv)) + 
   scale_fill_gradientn(name = "CV (%)\n", colours = c("green","lightgreen","yellow","orange","red"), limits = c(0,100)) +
   geom_text(aes(label = prettyNum(round(biom.mean,0), big.mark = ",")),size = 2.5) +
@@ -715,7 +752,8 @@ raster.biomass.all <- ggplot(boot.summ.sample.all, aes(factor(sciName),platform)
         strip.text.x = element_text(face = "bold")) +
   ggtitle("Biomass")
 
-ggsave(raster.biomass.all, filename = here("Figs/fig_raster_biomass_all.png"),height = fig.height, width = fig.width)
+ggsave(raster.biomass.all, filename = here("Figs/fig_raster_biomass_all.png"),
+       height = fig.height, width = fig.width)
 
 raster.biomass.select <- ggplot(filter(boot.summ.sample.all,sciName %in% main.spp), aes(factor(sciName),platform)) + geom_raster(aes(fill = biom.cv)) + 
   scale_fill_gradientn(name = "CV (%)\n", colours = c("green","lightgreen","yellow","orange","red"), limits = c(0,100)) +
@@ -912,27 +950,6 @@ tx.summ.all <- tx.summ.site %>%
             depth.max = max(depth.max))
 ```
 
-```{r ObsSummary}
-# Combine summaries from each vehicle
-obs.all.summ <- obs.rov.summ %>%
-  left_join(obs.sub.summ) %>% 
-  replace_na(list(nROV = 0, nSUB = 0)) %>% 
-  # left_join(obs.auv.summ) %>% 
-  mutate(nGrand = nROV + nSUB) %>% 
-  mutate(pctGrand = nGrand/sum(.$nGrand)*100) %>% 
-  arrange(desc(pctGrand), sciName) %>% 
-  rename(
-      "Scientific name" = sciName,
-      "Common name"     = commonName,
-      "$N_R$"             = nROV,
-      "$\\%_R$"           = pctROV,
-      "$N_S$"             = nSUB,
-      "$\\%_S$"           = pctSUB,
-      "$N_G$"             = nGrand,
-      "$\\%_G$"           = pctGrand)
-
-```
-
 **Estimates of groundfish biomass, abundance, and diversity using different optical sampling methods** 
 
 Kevin L. Stierhoff^1^, Mary M. Yoklavich^2^, and M. Elizabeth Clarke^3^, Jeff Anderson^4^, Erica L. Fruh^3^, Thomas E. Laidig^2^, Scott A. Mau^1^, David W. Murfin^1^, Abigail Powell^3^, Jeremy C. Taylor^4^, Diana L. Watters^2^  
@@ -1027,8 +1044,9 @@ _**[AUV, from an early report]** `Twenty-seven` cells were sampled throughout th
 _**[AUV, from an early report]** Cells surveyed on the top of Piggy Bank (200-300 m) contained rocky ridge substrate (30%), mud (33%) and similar amounts of boulder and cobble (17 and 19%, respectively). With increasing depth, the percentage of mud and cobble substrates increased. The top two depth strata on the Footprint were primarily cobble and boulder, with sand and rock ridge increasing with depth (**Figure X**.  Mud was the primary substrate observed in all depth strata on the flank of the Footprint (86, 99 and 97%)._
 
 ## Length frequency composition 
+The length composition of observed fishes varied by survey platform. Similar
 
-**[GENERATE LENGTH FREQUENCY PLOTS FOR EACH SURVEY METHOD]**  
+**(Figure 6)**  
 
 Examine whether differences in length distributions contribute to any differences in biomass or abundance.
 
@@ -1165,6 +1183,17 @@ if (doc.type == "docx") {
 
 ```{r ObsSummaryTable}
 # Format and print table of observations
+obs.all.summ <- obs.all.summ %>% 
+  rename(
+      "Scientific name" = sciName,
+      "Common name"     = commonName,
+      "$N_R$"             = nROV,
+      "$\\%_R$"           = pctROV,
+      "$N_S$"             = nSUB,
+      "$\\%_S$"           = pctSUB,
+      "$N_G$"             = nGrand,
+      "$\\%_G$"           = pctGrand)
+
 if (doc.type == "docx") {
   obs.all.summ %>% 
     regulartable() %>% 
@@ -1316,7 +1345,7 @@ include_graphics(here("Figs/fig_survey_map.png"))
 
 \newpage
 
-```{r RasterAllCV,fig.align='center',out.width='7in'}
+```{r RasterAllCV,fig.align='center',out.width='6in'}
 include_graphics(here("Figs/fig_raster_both_all.png"))
 ```  
 
@@ -1348,3 +1377,18 @@ include_graphics(here("Figs/fig_density_both_piggy.png"))
 **Figure 5.** Distribution of mean abundance (_N_; top) and biomass (_M_, kg; bottom) estimates of select species at Piggy Bank. Estimates were produced using bootstrap resampling (n = `r n.boot` samples) from each sampling strata (depth and bank for the SUB and ROV; bank for the AUV). **[selected these species for exploration as above; however, not all of the species in The Footprint figure were observed at Piggy Bank]**
 
 \elandscape
+\newpage  
+
+```{r LengthHistogramAll,fig.align='center',out.width='6in'}
+include_graphics(here("Figs/fig_histogram_length_comp.png"))
+```  
+
+**Figure 6.** Length (_TL_, cm)distribution of fishes observed using the three vehicles. **[Selected these species for exploration as above; however, not all of the species in The Footprint figure were observed at Piggy Bank. Excluded unidentified rockfishes (_Sebastes_ and _Sebastomus_), thornyheads (_Sebastolobus_), and hake.]**
+
+\newpage  
+
+```{r LengthHistogramSelect,fig.align='center',out.height='8in'}
+include_graphics(here("Figs/fig_histogram_length_comp_select.png"))
+```  
+
+**Figure 7.** Length (_TL_, cm)distribution of fishes observed using the three vehicles. **[In addition to those excluded above (unidentified rockfishes (_Sebastes_ and _Sebastomus_), thornyheads (_Sebastolobus_), and hake), also excluded species not of great interest.**
