@@ -180,7 +180,7 @@ nav.rov.summ <- nav.rov %>%
 events.rov <- filter(events.rov,dive_name %in% logs.rov$dive_name)
 
 # Format L/W data table
-lw.data <- filter(lw.data,to_use == 1) %>%
+lw.data <- filter(lw.data, to_use == 1) %>%
   select(-id,-to_use) %>% 
   rename(sciName = sci_name_full,
          Reference = reference) %>% 
@@ -190,7 +190,7 @@ lw.data <- filter(lw.data,to_use == 1) %>%
   select(sciName, commonName, a, b, L_max, sex, Reference, comment)
 
 # Format L/age data table
-la.data <- filter(la.data,to_use == 1) %>% 
+la.data <- filter(la.data, to_use == 1) %>% 
   select(-id,-to_use) %>% 
   rename(sciName = sci_name_full,
          Reference = reference) %>% 
@@ -243,6 +243,14 @@ photo.obs.rov  <- filter(photo.obs.rov,photo_id %in% photo.info.rov$photo_id) %>
 lengths.rov <- filter(lengths.rov,dive_name %in% logs.rov$dive_name) %>% 
   left_join(select(spp,species_code,sci_name,sciName,commonName,species_group)) %>% 
   droplevels()
+
+lw.data.rov <- obs.rov %>% 
+  select(sciName, commonName, counts, length_cm, weight_g)
+  
+# Expand data frame by counts
+lw.data.rov <- obs.rov[rep(row.names(obs.rov),obs.rov$counts), ] %>% 
+  select(sciName, commonName, counts, length_cm, weight_g) %>% 
+  mutate(platform = "ROV")
 ```
 
 ```{r ImportSUB}
@@ -290,15 +298,9 @@ if (import.data) {
     # Close connection
     close(sub.con)
     
-    # Get transect distances
-    tx.dist.sub <- counts.sub %>% 
-      select(dive_name,distance) %>% 
-      distinct() %>% 
-      arrange(dive_name)
-    
     # Import density summary
     counts.sub <- read_excel(here("Data/SUB/sub_data.xlsx"),
-                           sheet = "Yok_Sub_Density_step3") %>% 
+                             sheet = "Yok_Sub_Density_step3") %>% 
       rename(site = bank,
              dive_name = dive_tx,
              sciName   = Scientific_Name,
@@ -319,6 +321,29 @@ if (import.data) {
       select(sciName,fishcode) %>% 
       distinct() %>% 
       arrange(sciName)
+    
+    # Import biomass summary
+    lengths.sub <- read_excel(here("Data/SUB/sub_data.xlsx"),
+                             sheet = "Yok_Sub_Biomass_step2") %>% 
+      left_join(names.sub) %>% 
+      rename(site = bank,
+             dive_name = divetx,
+             counts    = SumOffreq,
+             length_cm = size_class) %>% 
+      mutate(site = str_replace(site,"footprint","The Footprint"),
+             site = str_replace(site,"piggy","Piggy Bank"),
+             sciName   = str_replace(sciName,"unidentified sebastomus","Sebastomus sp."),
+             sciName   = str_replace(sciName,"Sebastes spp.","Sebastes sp."),
+             sciName   = str_replace(sciName,"Sebastolobus spp.","Sebastolobus sp."),
+             sciName   = str_replace(sciName,"Sebastes miniatus","Sebastes crocotulus")) %>%
+      left_join(select(spp, sciName, commonName)) %>% 
+      droplevels()
+    
+    # Get transect distances
+    tx.dist.sub <- counts.sub %>% 
+      select(dive_name,distance) %>% 
+      distinct() %>% 
+      arrange(dive_name)
     
     # Import sub density summary
     biomass.sub <- read_excel(here("Data/SUB/sub_data.xlsx"),
@@ -348,7 +373,7 @@ if (import.data) {
       left_join(tx.strata.sub)
   }
   # Save SUB data
-  save(counts.sub,biomass.sub,ctd.sub,nav.sub,tx.dist.sub,file = here("Data/SUB/sub_data.Rdata"))
+  save(counts.sub,biomass.sub,ctd.sub,nav.sub,tx.dist.sub,lengths.sub,file = here("Data/SUB/sub_data.Rdata"))
 } else {
   # Load SUB data
   load(here("Data/SUB/sub_data.Rdata"))
@@ -406,11 +431,37 @@ boot.data.sub <- biomass.sub %>%
 
 # Write to CSV
 write_csv(boot.data.sub,here("Output/boot_data_sub.csv"))
+
+# Expand data frame by counts
+lw.data.sub <- lengths.sub[rep(row.names(lengths.sub),lengths.sub$counts), ] %>% 
+  select(sciName, commonName, counts, length_cm, weight_g) %>% 
+  mutate(platform = "SUB")
 ```
 
 ```{r ImportAUV}
 
 ```
+
+```{r LengthWeightHistogram,eval=F}
+# Combine all L/W data
+lw.data.all <- lw.data.rov %>% 
+  bind_rows(lw.data.sub)
+
+# Length histogram for all species
+lw.hist.all <- ggplot(lw.data.all, aes(length_cm, fill = platform)) +
+  geom_histogram(breaks = seq(0,70,10),colour = "white",alpha = 0.5) +
+  scale_fill_manual(name = "Vehicle\n", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  facet_wrap(~sciName, scales = "free_y") +
+  theme_bw() +
+  theme(strip.text.x = element_text(face = "bold.italic"),
+        strip.background.x = element_blank()) +
+  xlab("\nTotal length (cm)") + ylab("Frequency")
+
+# Save figure
+ggsave(lw.hist.all, filename = here("Figs/fig_histogram_length_comp.png"),
+       height = 12, width = 15)
+```
+
 
 ```{r CombineBootstrapData}
 # Combine data from all vehicles for the bootstrap analysis
@@ -970,20 +1021,22 @@ Using the SUB, a total of `r tx.summ.all$n[tx.summ.all$platform == "SUB"]` trans
 
 Using the ROV, a total of `r tx.summ.all$n[tx.summ.all$platform == "ROV"]` transects were conducted between `r round(tx.summ.all$depth.min[tx.summ.all$platform == "ROV"],0)` and `r round(tx.summ.all$depth.max[tx.summ.all$platform == "ROV"],0)` m on The Footprint (n = `r tx.summ.site$n[tx.summ.site$platform == "ROV" & tx.summ.site$site == "The Footprint"]` transects) and Piggy Bank (n = `r tx.summ.site$n[tx.summ.site$platform == "ROV" & tx.summ.site$site == "Piggy Bank"]` transects) covering a total distance of `r sprintf("%.1f",tx.summ.all$D[tx.summ.all$platform == "ROV"])` km and a total area of `r sprintf("%.4f",tx.summ.all$A[tx.summ.all$platform == "ROV"])` km^2^ (**Table 2**). Mean transect length was `r sprintf("%.0f",mean(tx.summ.rov$distance))` m (SE = `r sprintf("%.0f",sd(tx.summ.rov$distance)/sqrt(nrow(tx.summ.rov)))` m). Transect duration ranged from `r sprintf("%.0f",min(tx.summ.rov$duration))` to `r sprintf("%.0f",max(tx.summ.rov$duration))` min (mean = `r sprintf("%.0f",mean(tx.summ.rov$duration))` min, SE = `r sprintf("%.1f",sd(tx.summ.rov$duration)/sqrt(nrow(tx.summ.rov)))` min). 
 
-**[AUV]** `Twenty-seven` cells were sampled throughout the survey area covering a total of `70,006` m^2^ and ranging in depth from `99` to `487` m: `13` on The Footprint, `six` on the flank of Footprint, and `eight` on Piggy Bank (**Table X**, **Figure X**).  `Seventeen` of the `27` cells were entirely within one 100-m depth stratum, while `ten` cells spanned two 100 m strata. The range of depths surveyed within a cell varied from 10 m to 83 m. Habitats encountered ranged from high-relief rock ridge to mud/sand bottom (**Figure x**). 
+_**[AUV, from an early report]** `Twenty-seven` cells were sampled throughout the survey area covering a total of `70,006` m^2^ and ranging in depth from `99` to `487` m: `13` on The Footprint, `six` on the flank of Footprint, and `eight` on Piggy Bank (**Table X**).  `Seventeen` of the `27` cells were entirely within one 100-m depth stratum, while `ten` cells spanned two 100 m strata. The range of depths surveyed within a cell varied from 10 m to 83 m. Habitats encountered ranged from high-relief rock ridge to mud/sand bottom (**Figure X**)._ 
 
 ## Seabed composition  
-**[AUV]** Cells surveyed on the top of Piggy Bank (200-300 m) contained rocky ridge substrate (30%), mud (33%) and similar amounts of boulder and cobble (17 and 19%, respectively). With increasing depth, the percentage of mud and cobble substrates increased. The top two depth strata on the Footprint were primarily cobble and boulder, with sand and rock ridge increasing with depth (**Figure X**.  Mud was the primary substrate observed in all depth strata on the flank of the Footprint (86, 99 and 97%).
+_**[AUV, from an early report]** Cells surveyed on the top of Piggy Bank (200-300 m) contained rocky ridge substrate (30%), mud (33%) and similar amounts of boulder and cobble (17 and 19%, respectively). With increasing depth, the percentage of mud and cobble substrates increased. The top two depth strata on the Footprint were primarily cobble and boulder, with sand and rock ridge increasing with depth (**Figure X**.  Mud was the primary substrate observed in all depth strata on the flank of the Footprint (86, 99 and 97%)._
 
 ## Length frequency composition 
 
-**[GENERATE LENGTH FREQUENCY PLOTS FOR EACH SURVEY METHOD]**
+**[GENERATE LENGTH FREQUENCY PLOTS FOR EACH SURVEY METHOD]**  
+
 Examine whether differences in length distributions contribute to any differences in biomass or abundance.
 
 ## Abundance and biomass estimates  
 ### SUB  
-A total of `25,085` individuals from `29` _Sebastes_ species were observed, which as a group comprised ~`80`% of the total fishes encountered. Unidentified rockfishes (_Sebastes_ spp.) comprised Only `0.5`% of all rockfishes (excluding some young-of-year juveniles) to species or species group (i.e., Sebastomus). Dwarf rockfish species were most numerous and dominated by _S. hopkinsi_ (`20`% of all rockfishes), _S. semicinctus_ (`17`% of all rockfishes), _S. jordani_ (`12`% of all rockfishes), _S. wilsoni_ (pygmy `7`%), and _S. ensifer_ (`7`%). Of particular interest were the observations of `147` _S. paucispinis_ (`0.7`%), `38` _S. levis_ (`0.2`%), _S. miniatus_ (`0.1`%), , _S. eos_ (<`0.1`%), and `4`_S. gilli_ (<`0.1`%; a rare and elusive species). Among non-rockfish species, Pacific hake (mostly juveniles; `4`%) were relatively abundant and lingcod were not (`0.2`%).  
+**ALL TEXT IN THIS SECTION IS COPY/PASTE FROM THE VARIOUS REPORTS; MUST UPDATE USING NEW RESULTS**
 
+A total of `25,085` individuals from `29` _Sebastes_ species were observed, which as a group comprised ~`80`% of the total fishes encountered. Unidentified rockfishes (_Sebastes_ spp.) comprised Only `0.5`% of all rockfishes (excluding some young-of-year juveniles) to species or species group (i.e., Sebastomus). Dwarf rockfish species were most numerous and dominated by _S. hopkinsi_ (`20`% of all rockfishes), _S. semicinctus_ (`17`% of all rockfishes), _S. jordani_ (`12`% of all rockfishes), _S. wilsoni_ (pygmy `7`%), and _S. ensifer_ (`7`%). Of particular interest were the observations of `147` _S. paucispinis_ (`0.7`%), `38` _S. levis_ (`0.2`%), _S. miniatus_ (`0.1`%), , _S. eos_ (<`0.1`%), and `4`_S. gilli_ (<`0.1`%; a rare and elusive species). Among non-rockfish species, Pacific hake (mostly juveniles; `4`%) were relatively abundant and lingcod were not (`0.2`%). 
 A total of `414,975` fishes and `60.3` mt of fish biomass on Piggy Bank (not including unidentified adult orjuvenile rockfishes nor sharpchin rockfish (_S. zacentrus_) because meaningful length-weight relationships were not available) (**Table 5**). _Sebastes jordani_ ($N$ = `163,022`), _S. rufus_ ($N$ = `116,040`), and _S. diploproa_ (64,489 individuals) were most abundant and comprised the greatest biomass (`18`%, `53`%, and `12`% of total biomass, respectively) on the Piggy Bank.  
 
 A total of `1,953,844` fishes representing `147.6` mt of fish biomass (excluding biomass estimates of unidentified rockfishes and sharpchin rockfish, as noted above) on The Footprint. Three dwarf species of rockfishes (_S. jordani_, $N$ = `339,855`); _S. semicinctus_, $N$ = `302,275`; and _Sebastomus_ (likely _S. ensifer_), $N$ = `268,618`) were most abundant but together comprised only `27`% of the total biomass. Among the large-bodied species **[these are "large-bodied"?]**, _S. diploproa_ ($N$ = `221,329`, $B$ = `14.5` mt), juvenile _M. productus_ ($N$ = `164,087`, $B$ = `19.5` mt), and _S. rufus_ ($N$ = `68,629`, $B$ = `14.9` mt) were relatively abundant. _Sebastes levis_ ($N$ = `4,325`, $B$ = `4.2` mt) comprised only `0.2`% of total abundance and `2.8`% of total biomass on The Footprint. _Sebastes paucispinis_ ($N$ = `13,342`, $B$ = `8.6` mt) comprised `0.7`% of total abundance and `5.8`% of total biomass at this site.  
@@ -993,6 +1046,7 @@ Combining estimates from both banks, a total of `2,368,819` fishes with a biomas
 The coefficient of variation (CV) ranged from `0.12` to `0.84` for estimates of total abundance and from `0.15` to `0.92` for estimates of total biomass over both banks combined (**Table 7**). The CV for total abundance was `0.30` for _S. levis_, `0.26` for _S. paucispinis_, and `0.32` for _S. rufus_; the CV for total biomass was `0.44` for _S. levis_, `0.27` for _S. paucispinis_, and `0.36` for _S. rufus_.  
 
 ### ROV 
+**ALL TEXT IN THIS SECTION IS COPY/PASTE FROM THE VARIOUS REPORTS; MUST UPDATE USING NEW RESULTS**
 Over `37,700` individuals from thirty-three _Sebastes_ species, _O. elongatus_, and _M. productus_ were counted during this survey. The groundfish community throughout the survey area was numerically dominated by four small, semi-pelagic and aggregating species (squarespot rockfish, _S. hopkinsi_; swordspine rockfish, _S. ensifer_; halfbanded rockfish, _S. semicinctus_; and shortbelly rockfish, _S. jordani_) that comprised ~`80`% of all rockfishes (**Table 1**). Among non-aggregating species, bank (_S. rufus_, `5`%) and swordspine rockfishes (_S. simulator_, `1.5`%) were commonly observed. _Sebastes rufus_ (n = `1,883`) was the most abundant target species. In comparison, _S. paucispinis_ (n = `232`), _S. levis_ (n = `62`), and _S. crocotulus_ (n = `16`) were much less abundant (**Table X**).  
 
 Overall abundance and biomass estimates were calculated for `33` species of rockfish, three unidentified rockfish groups, _O. elongatus_, and _M. productus_ (**Table 3**). Estimates of abundance and biomass of each of these species within each depth strata on each bank is provided in **Appendix 3**  
@@ -1003,32 +1057,34 @@ Total biomass of all species was approximately `287` metric tons (mt; 1 mt = 1,0
 The overall coefficient of variation (CV) for abundance (range = `0.12`-`1.00`) and biomass estimates (range = `0.15`-`1.01`) varied greatly among all species (**Table 3**). Species whose abundance and biomass estimates with high CVs (i.e., greater than ~`0.50`) were those that were either rarely encountered (e.g., _S. crameri_, _S. lentiginosus_, _S. rufinanus_, and _S. serranoides_) or whose densities varied greatly with depth (e.g., _S. hopkinsi_, _S. jordani_, _S. ovalis_, and _S. semicinctus_, which were densely aggregated in the shallower strata of the Footprint and almost entirely absent on Piggy Bank). Among target species, the CV values were relatively low and ranged from `0.28`-`0.46` and `0.26`-`0.44` for abundance and biomass, respectively. For _S. levis_, the overall CV values of abundance and biomass were quite low (`0.28` and `0.30`, respectively), and probably reflect the relatively even distribution of this species among transects on the Footprint and their total absence from any transects on Piggy Bank (**Figure 2**). _Sebastes rufus_ also had very low CV values (`0.26` for both abundance and biomass), but in contrast to _S. levis_, was highly abundant in the deeper strata on both banks (**Fig. 2**). As expected, differences in the distribution of many species were apparent by depth and bank (**Fig. 2**). Small, more numerically abundant species (e.g., _S. ensifer_, _S. hopkinsi_, _S. semicinctus_, and _S. wilsoni_) were commonly encountered on the shallower (<200 m) portions of the Footprint. _Sebastes paucispinis_ and _S. levis_ were found almost exclusively on the Footprint. _Sebastes diploproa_, _S. rufus_, and _S. simulator_ were found throughout the deeper strata on both banks, and were the only species commonly observed on Piggy Bank.  
 
 ### AUV
-**[WAITING FOR LIZ'S UPDATED RESULTS]**
+**ALL TEXT IN THIS SECTION IS COPY/PASTE FROM THE VARIOUS REPORTS; MUST UPDATE USING NEW RESULTS**
 _A total of `21,228` fishes from `51` taxa were identified during the survey including `18` rockfish species (**Table X**). Rockfishes comprised `75`% of the fishes encountered, including groups of unidentified rockfish (_Sebastes_ spp., **X%**), rosy-group rockfishes (_Sebastomus_, **X%**), and thornyheads (_Sebastolobus_ sp., **X%**), and other species that could be identified to species (**X%**). Notable were observations of `11` cowcod (_S. levis_), 29 bocaccio (_S. paucispinis_) and one bronzespotted rockfish (_S. gilli_). In addition, `53` lingcod (_Ophiodon elongatus_), `19` Pacific hake (_Merluccius productus_) and `10` sablefish (_Anoplopoma fimbria_) were observed. Fish assemblages varied between depth strata and between the two banks. Twenty-nine taxa only occurred on the Footprint or along its Flank. Two species were observed on Piggy Bank only. _ 
 
 ## Biodiversity  
 ### SUB  
+**ALL TEXT IN THIS SECTION IS COPY/PASTE FROM THE VARIOUS REPORTS; MUST UPDATE USING NEW RESULTS**
 Diversity (**or richness??**; measured as cumulative number of species in transects within a depth stratum, excluding groups), was highest on The Footprint in the 100-200 m (`23` species) and 200-300 m (`26` species) strata (**Table X**). Species richness ($S$) was lowest on Piggy Bank at both depth strata (`8` and `11` species in the 200-300 and 300-400 m strata, respectively).  
 
 ### ROV  
+**ALL TEXT IN THIS SECTION IS COPY/PASTE FROM THE VARIOUS REPORTS; MUST UPDATE USING NEW RESULTS**
 Biodiversity also varied greatly by depth strata and bank (**Table 6**). The greatest number of species (richness = `15`) was observed in the 0-100 m depth stratum on the Footprint, and the fewest were observed in the 300-400 m stratum at Piggy Bank. The rarefied species richness (the number of species expected per number of samples) was greatest in the 300-400 m stratum at the Footprint, with all other strata having rarefied species richness between `3.5` and `5.1`. Neither of these richness parameters account for the abundance of different species so Shannon $H’$ and Simpson $\lambda$, which do account for abundance differences, were also calculated. Again, the greatest diversity (both $H’$ and $\lambda$, respectively) were observed in the 300-400 m stratum at the Footprint, but diversity was relatively uniform across all depth strata and banks. Biodiversity estimates for each transect is presented in **Appendix 4**.  
 
 The species accumulation (rarefaction) curves from each bank have much different shapes (**Figure 9**). The curve for the Footprint rises steeply in the first few samples and begins to plateau after ~ **10** transects. The rarefaction curve at Piggy Bank increased at a slower rate and never reached an asymptote. Although there were fewer transects at Piggy Bank, the other diversity estimates corroborate the finding that there is less biodiversity at Piggy Bank compared to the Footprint.  
 
 ### AUV
-**[WAITING FOR LIZ'S UPDATED RESULTS]**
+**ALL TEXT IN THIS SECTION IS COPY/PASTE FROM THE VARIOUS REPORTS; MUST UPDATE USING NEW RESULTS**
 Species richness (total species, excluding groups) was the highest in the 100-200 m stratum on the Footprint (N = 23 species) and in the 300-400 m stratum on the Flank (18 species, **Table x**). Species richness was lowest in all three strata on Piggy Bank (six species at 200-300 m, eight species at 300-400 m, and seven species at 400-500 m).
 
 # Discussion  
 ## Survey effort 
+**ALL TEXT IN THIS SECTION IS COPY/PASTE FROM THE VARIOUS REPORTS; MUST UPDATE USING NEW RESULTS**
 The AUV was able to sample the deeper 400-500 m stratum on the flank of Footprint, and to provide fish and habitat information that was not available from the ROV or SUB (**The ROV could have sampled deeper but . 
 
-## Abundance and biomass estimates  
+## Abundance and biomass estimates
+**ALL TEXT IN THIS SECTION IS COPY/PASTE FROM THE VARIOUS REPORTS; MUST UPDATE USING NEW RESULTS**
 
 ### AUV  
-
-The species encountered by the AUV, ROV, and SUB were comparable.  
-
+**ALL TEXT IN THIS SECTION IS COPY/PASTE FROM THE VARIOUS REPORTS; MUST UPDATE USING NEW RESULTS**
 Species diversity was similar amongst all three methodologies showing greater species richness at the The Footprint and lower richness at Piggy Bank.  The ROV and the SUB included records of rockfish species not identified by the AUV.  This could be due to the fact that the cameras on the AUV are positioned downward, rather than forward facing, allowing fish directly in front of the unit to escape detection. Another possible reason could be the difficulty in identifying some rockfish species from the dorsal view.  The AUV detected comparable numbers of fishes, but the fish were identified to groupings (i.e. Unidentified rockfish, or Sebastomus) as opposed to species.
 
 \newpage  
