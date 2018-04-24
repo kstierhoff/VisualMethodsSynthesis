@@ -18,27 +18,17 @@ csl: csl/ices-journal-of-marine-science.csl
 ---  
 
 ```{r ConfigureDocument, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
-# List packages required to run the script
-pkgs <- c("raster","tidyverse","knitr","swfscMisc","lubridate","here","boot","sf",
-          "maps","readxl","maptools","png","mapdata","flextable","knitr",
-          "cowplot","devtools","kableExtra","RODBC","pander","DBI",
-          "rnaturalearth","odbc","shadowtext")
-# Install and load all CRAN packages provided from a character vector
-load_pkgs = function(pkgs) {
-  new_pkgs = pkgs[!(pkgs %in% installed.packages()[ ,'Package'])]
-  if (length(new_pkgs) > 0) install.packages(new_pkgs,repos = "http://cran.cnr.berkeley.edu/")
-  invisible(lapply(pkgs,function(x)
-    suppressPackageStartupMessages(library(x,character.only = T))))
-}
-# Load packages
-load_pkgs(pkgs)
+# Install and load pacman (library management package)
+if (!require("pacman")) install.packages("pacman")
 
-# Install and load surveyR package from github
-if ("surveyR" %in% installed.packages()[ ,'Package'] == F) {
-  install_github("kstierhoff/surveyR")
-}
-# Load surveyR
-library(surveyR)
+# Install and load required packages
+pacman::p_load(raster,tidyverse,knitr,swfscMisc,lubridate,here,boot,sf,
+          maps,readxl,maptools,png,mapdata,flextable,knitr,
+          cowplot,devtools,kableExtra,RODBC,pander,DBI,
+          rnaturalearth,odbc,shadowtext)
+
+# Install and load Github packages
+pacman::p_load_gh("kstierhoff/surveyR")
 
 # determines method of table generation (whether kable or pander) for best formatting
 doc.type <- knitr::opts_knit$get('rmarkdown.pandoc.to')
