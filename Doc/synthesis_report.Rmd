@@ -24,11 +24,11 @@ if (!require("pacman")) install.packages("pacman")
 # Install and load required packages
 pacman::p_load(raster,tidyverse,knitr,swfscMisc,lubridate,here,boot,sf,
           maps,readxl,maptools,png,mapdata,flextable,knitr,
-          cowplot,devtools,kableExtra,RODBC,pander,DBI,
+          cowplot,devtools,kableExtra,RODBC,pander,DBI,rgdal,
           rnaturalearth,odbc,shadowtext)
 
 # Install and load Github packages
-pacman::p_load_gh("kstierhoff/surveyR")
+pacman::p_load_gh(c("kstierhoff/surveyR","tidyverse/ggplot2"))
 
 # determines method of table generation (whether kable or pander) for best formatting
 doc.type <- knitr::opts_knit$get('rmarkdown.pandoc.to')
@@ -50,8 +50,9 @@ if (doc.type == "latex") {
 
 # processing instructions (TRUE/FALSE)
 import.data <- F # Download data from SQL database
-save.figs   <- F # Draw plots and maps, or use existing
+save.figs   <- T # Draw plots and maps, or use existing
 do.boot     <- F # Conduct bootstrap resampling
+do.spatial  <- F # Perform spatial analyses (typically done once, or if data change)
 get.sf      <- F # Download costline data
 n.boot      <- 1000 # Number of bootstrap samples
 
@@ -78,11 +79,14 @@ fig.height = 7
 ```  
 
 ```{r ImportSurveyData}
-strata.area <- read_csv(here("Data/strata_area.csv")) %>% 
-  rename(site = site_name,
-         stratum = depth_stratum) %>% 
-  mutate(stratum_area = area*1e6) %>% 
-  select(-area)
+# Import stratum shapefile for ROV and SUB survey
+depth_strata    <- st_read(here("Data/GIS/depth_polygons.shp")) %>% 
+  mutate(stratum_area = area_sqkm*1e6)
+
+# Create data frame with stratum area by site and depth
+strata.area <- select(depth_strata, site, stratum, stratum_area) %>% 
+  st_set_geometry(NULL)
+
 # Summarize strata area by site
 site.area <- strata.area %>% 
   group_by(site) %>% 
@@ -90,80 +94,144 @@ site.area <- strata.area %>%
 ```
 
 ```{r ImportROV}
+# Either import ROV data from the database, or load already imported data
 if (import.data) {
+  # Configure database channel
   channel = odbcConnect(dsn = 'ROV2')
-  nav.rov <- sqlQuery(channel,"
+  # Import nav data
+  nav.rov.all <- sqlQuery(channel,"
             SELECT dbo.tbl_NAV.*, dbo.tbl_LOGS.survey_number, dbo.tbl_LOGS.site_general
             FROM dbo.tbl_LOGS INNER JOIN dbo.tbl_NAV ON dbo.tbl_LOGS.dive_name = dbo.tbl_NAV.dive_name
             WHERE (((dbo.tbl_LOGS.survey_number)=40));")
-  logs.rov             <- sqlFetch(channel, "dbo.tbl_LOGS")
+  # Import transect logs
+  logs.rov.all         <- sqlFetch(channel, "dbo.tbl_LOGS")
+  # Import event logs
   events.rov           <- sqlFetch(channel, "dbo.tbl_EVENTS") 
+  # Import video annotations
   video.obs.rov        <- sqlFetch(channel, "dbo.tbl_VIDEO_OBS")
+  # Import photo info
   photo.info.rov       <- sqlFetch(channel, "dbo.tbl_PHOTO_INFO")
+  # Import photo obs
   photo.obs.rov        <- sqlFetch(channel, "dbo.tbl_PHOTO_OBS")
+  # Import lengths from ImageJ
   lengths.rov          <- sqlFetch(channel, "dbo.tbl_FISH_LENGTHS")
+  # Import species info
   spp                  <- sqlFetch(channel, "dbo.tlu_SPECIES_CODES")
+  # Import size codes
   size.codes           <- sqlFetch(channel, "dbo.tlu_SIZE_CODES")
+  # Import length-to-weight and length-to-age data
   lw.data              <- sqlFetch(channel, "dbo.tlu_LENGTH_WEIGHT_DATA")
   la.data              <- sqlFetch(channel, "dbo.tlu_LENGTH_AGE_DATA")
   close(channel)
   
-  save(nav.rov,logs.rov,events.rov,video.obs.rov,photo.info.rov,
+  # Save imported raw data
+  save(nav.rov.all,logs.rov.all,events.rov,video.obs.rov,photo.info.rov,
        photo.obs.rov,lengths.rov,spp,lw.data,la.data,size.codes,
        file = here("Data/ROV/rov_data.Rdata"))
 } else {
+  # Load imported data
   load(here("Data/ROV/rov_data.Rdata"))
 }
 
-# Rename species code colums
+# Standardize species code columns
 spp <- spp %>% 
   rename(sciName = sci_name_full,
          commonName = common_name)
 
-# Remove unused logs
-logs.rov <- filter(logs.rov,survey_number == 40 & for_analysis == 1) %>% 
+# Remove unused logs; used to filter other data later
+logs.rov <- filter(logs.rov.all,survey_number == 40 & for_analysis == 1) %>% 
   rename(site = site_general)
 
-# Read good nav IDs
-nav.rov.good <- read_csv(here("Data/ROV/good_rov_nav.csv"))$nav_id
-
-# Filter, rename nav
-nav.rov        <- filter(nav.rov,dive_name %in% logs.rov$dive_name) %>%
+# Process ROV nav data ------------------------------------------------
+# Standardize nav columns
+nav.rov.all <- nav.rov.all %>% 
   rename(site = site_general,
          long = long_r,
          lat  = lat_r,
          disp = disp_r) %>% 
-  filter(nav_id %in% nav.rov.good) %>%
-  mutate(depth = depth - altitude, # Calculate seabed depth from pressure and altitude
-         stratum = cut(depth,seq(-400,0,100))) %>% 
-  arrange(date_time)
+  # Add for analysis from dive logs
+  left_join(select(logs.rov.all, dive_name, for_analysis)) 
 
-# Add lat/long/depth and species information to observations
-video.obs.rov <- filter(video.obs.rov,dive_name %in% logs.rov$dive_name) %>% 
-  left_join(select(nav.rov,nav_id,lat,long,depth)) %>% 
-  left_join(select(spp,species_code,sci_name,sciName,commonName,species_group)) %>% 
-  left_join(select(size.codes,size_code,desc_coast11)) %>% 
-  rename(size_class = desc_coast11) %>%
-  mutate(geol_ps = paste(geol_prim,geol_sec,sep = "")) %>% 
-  droplevels()
+# Read good nav IDs from CSV (some nav records with bad USBL fixes were removed)
+nav.id.good <- read_csv(here("Data/ROV/good_rov_nav.csv"))$nav_id
+
+# Get nav_ids of "bad" USBL fixes
+nav.id.bad <- filter(nav.rov.all, !nav_id %in% nav.id.good)$nav_id
+
+# Remove bad nav records from master data frame
+nav.rov.good <- nav.rov.all %>% 
+  filter(nav_id %in% nav.id.good)
+
+# Replace bad fixes with nearest (in time) good fix
+for (i in nav.id.bad) {
+  # Find good nav record with smallest difftime
+  min.diff <- which.min(abs(difftime(nav.rov.all$date_time[nav.rov.all$nav_id == i],nav.rov.good$date_time)))
+  # Replace lat and log for bad records with good fixes nearby
+  nav.rov.all$lat[nav.rov.all$nav_id == i] <- nav.rov.good$lat[min.diff]
+  nav.rov.all$long[nav.rov.all$nav_id == i] <- nav.rov.good$long[min.diff]
+}
+
+# Intersect nav with depth polygons to assign sampling strata
+if (do.spatial) {
+  # Do intersection and save results
+  nav.rov.int <- nav.rov.all %>% 
+    st_as_sf(coords = c("long","lat"), crs = 4326) %>% 
+    st_intersection(select(depth_strata, stratum)) %>% 
+    st_set_geometry(NULL)
+  # Save results
+  save(nav.rov.int, file = here("Data/ROV/rov_nav_intersection.Rdata"))
+} else {
+  # Load intersection results
+  load(here("Data/ROV/rov_nav_intersection.Rdata"))
+}
 
 # Calculate transect width
-cw.data <- calc_width(nav.rov$pitch,nav.rov$altitude,ROV = "Phantom")
+cw.data <- calc_width(nav.rov.all$pitch, nav.rov.all$altitude, ROV = "Phantom")
 
-# Merge data
-nav.rov <- bind_cols(nav.rov,cw.data) %>% 
-  filter(pitch < 0 & slant_range <= 6) %>% 
-  mutate(area = center_width * disp)
+# Add transect width, compute area and seabed depth, and filter bad data
+nav.rov <- nav.rov.all %>% 
+  # Add cw data
+  bind_cols(cw.data) %>%
+  # Compute seabed depth and area
+  mutate(area = center_width * disp,
+         depth = depth - altitude) %>% 
+  left_join(select(nav.rov.int, nav_id, stratum)) %>% 
+  # Filter to remove unused transects and time off effort
+  filter(for_analysis == 1, pitch < 0, slant_range <= 6, nav_id %in% nav.rov.int$nav_id) %>%
+  # Arrange by date/time
+  arrange(date_time)
+
+# # Plot all nav and nav used in the analysis 
+# ggplot(nav.rov.all, aes(long, lat, group = dive_name)) + geom_path() +
+#   geom_point(data = nav.rov, aes(long, lat), shape = 21, size = 1, alpha = 0.5, colour = "red", fill = NA) 
+# 
+# # Plot all nav and nave used in the analysis by stratum
+# ggplot(nav.rov.all, aes(long, lat, group = dive_name)) + geom_path() +
+#   geom_point(data = nav.rov, aes(long, lat, colour = stratum), size = 1, alpha = 0.5)
 
 # Summmarise nav by dive and depth stratum for bootstrap analysis
 nav.rov.boot <- nav.rov %>% 
-  group_by(dive_name,stratum) %>% 
+  group_by(dive_name, stratum, site) %>% 
   summarise(
-    distance = sum(disp),
-    area = sum(area),
+    distance  = sum(disp),
+    area      = sum(area),
     depth.min = min(abs(depth)),
     depth.max = max(abs(depth)),
-    duration = round(as.numeric(difftime(max(date_time),min(date_time),units = "mins"))))
+    duration  = n()*2/60) # Duration (s) is number of nav records x2
+
+# # Identify transects less than 100 m in length
+# nav.rov.short <- nav.rov %>%
+#   left_join(select(nav.rov.boot, dive_name, stratum, distance)) %>%
+#   filter(distance < 80)
+
+# nav.rov.short %>% 
+#   group_by(dive_name, stratum) %>% 
+#   summarise(distance = sum(distance)) %>% 
+#   arrange(distance)
+
+# # Plot transects less than 100 m in length
+# ggplot(nav.rov.all, aes(long, lat, group = dive_name)) + geom_path() +
+#   geom_point(data = nav.rov.short, aes(long, lat, colour = stratum), size = 1, alpha = 0.5)
 
 # Summarize nav by site and stratum for tables
 nav.rov.summ <- nav.rov %>% 
@@ -175,7 +243,7 @@ nav.rov.summ <- nav.rov %>%
     distance = sum(disp),
     survey_area = sum(area)) %>% 
   mutate(platform = "ROV") %>% 
-  arrange(site,desc(stratum))
+  arrange(site,stratum) 
 
 # Filter other data
 events.rov <- filter(events.rov,dive_name %in% logs.rov$dive_name)
@@ -198,14 +266,58 @@ la.data <- filter(la.data, to_use == 1) %>%
   arrange(sciName) %>% 
   filter(!is.na(L_inf))
 
-# Extract only fish observations
+# Create final observation data frame
+# Add lat/long/depth and species information to observations
 obs.rov <- video.obs.rov %>% 
-  filter(str_detect(sciName,filter.spp)) %>% 
-  left_join(select(lw.data,sciName,a,b,L_max)) %>% 
-  mutate(stratum = cut(depth,seq(-400,0,100)),
-         length_cm = size_code * 10 + 5,
+  # Add for analysis from dive logs
+  left_join(select(logs.rov.all, dive_name, for_analysis)) %>% 
+  # Filter only observations for present survey
+  filter(dive_name %in% nav.rov.all$dive_name) %>% 
+  # Add lat, long, and depth
+  left_join(select(nav.rov.all, nav_id, lat, long, depth)) %>% 
+  # Add stratum from spatial intersection
+  left_join(select(nav.rov.int, nav_id, stratum)) %>% 
+  # Add spp info 
+  left_join(select(spp, species_code, sci_name, sciName, commonName, species_group)) %>% 
+  # Add size class info
+  left_join(select(size.codes, size_code, size_class = desc_coast11)) %>% 
+  # Create primary/secondary geology class
+  mutate(geol_ps = paste(geol_prim, geol_sec, sep = "")) %>% 
+  # Extract only fish observations
+  filter(str_detect(sciName, filter.spp)) %>% 
+  # Add length/weight data
+  left_join(select(lw.data,sciName, a, b, L_max)) %>% 
+  # Compute lengths from size codes, and weight from length and total count
+  mutate(length_cm = size_code * 10 + 5,
          weight_g = a * length_cm^b * counts) %>% 
   droplevels()
+
+# # Plot observations by stratum
+# ggplot(nav.rov.all, aes(long, lat, group = dive_name)) + geom_path() +
+#   geom_point(data = filter(obs.rov, !is.na(stratum)), aes(long, lat, colour = stratum), size = 1, alpha = 0.5) +
+#   geom_point(data = filter(obs.rov, is.na(stratum)), aes(long, lat), size = 2, colour = "red") +
+#   geom_point(data = filter(obs.rov, nav_id %in% nav.rov.short$nav_id), aes(long, lat), size = 2, colour = "blue")
+# 
+# # Summarize obs removed by removing short transeacts (< 80 m)
+# obs.rov %>% filter(nav_id %in% nav.rov.short$nav_id) %>% 
+#   group_by(sciName) %>% 
+#   count() %>% 
+#   arrange(desc(n))
+
+# Summarize observations for bootstrap analysis
+obs.rov.pos <- obs.rov %>% 
+  group_by(dive_name, stratum, sciName) %>% 
+  summarise(counts   = sum(counts),
+            weight_g = sum(weight_g)) 
+
+# Expand observations to create zeros for counts and weights 
+# when fish not observed in a transect
+obs.rov.boot <- obs.rov.pos %>%
+  select(-weight_g) %>% 
+  spread(key = sciName, value = counts, fill = 0) %>% 
+  gather(sciName, counts,-dive_name,-stratum) %>% 
+  left_join(select(obs.rov.pos, -counts)) %>% 
+  replace_na(list(weight_g = 0))
 
 # Summarize ROV observations
 obs.rov.summ <- obs.rov %>% 
@@ -215,19 +327,22 @@ obs.rov.summ <- obs.rov %>%
   mutate(pctROV = nROV/sum(.$nROV)*100)
   
 # ROV data for bootstrap analysis 
-boot.data.rov <- obs.rov %>% 
-  group_by(dive_name,stratum,sciName) %>% 
-  summarise(counts      = sum(counts),
-            weight_g    = sum(weight_g)) %>% 
-  left_join(nav.rov.boot) %>%
-  left_join(select(logs.rov,dive_name,site)) %>%
+# Combine obs and nav 
+boot.data.rov <- obs.rov.boot %>%
+  left_join(select(nav.rov.boot, -depth.min, -depth.max, -duration)) %>%
   mutate(dens_n = counts/area,         # Numeric density (n/m)
          dens_g = weight_g/area) %>%   # Biomass density (g/m)
   left_join(strata.area) %>%
   mutate(abund = dens_n*stratum_area, # Abundance (n)
          biom  = dens_g*stratum_area,
          platform = "ROV") %>%   # Biomass (g)
-  arrange(desc(counts)) 
+  filter(dive_name %in% nav.rov.int$dive_name) %>% 
+  arrange(desc(counts)) %>% 
+  select(site, everything())
+
+# # Plot all nav and nav used in the analysis
+# ggplot(nav.rov.all, aes(long, lat, group = dive_name)) + geom_path() +
+#   geom_path(data = filter(nav.rov.all, dive_name == "11-277A"), aes(long, lat, group = dive_name), colour = "red")
 
 # Write to CSV
 write_csv(boot.data.rov,here("Output/boot_data_rov.csv"))
@@ -248,7 +363,7 @@ lengths.rov <- filter(lengths.rov,dive_name %in% logs.rov$dive_name) %>%
 lw.data.rov <- obs.rov %>% 
   select(sciName, commonName, counts, length_cm, weight_g)
   
-# Expand data frame by counts
+# Expand data frame by counts for plotting length frequencies
 lw.data.rov <- obs.rov[rep(row.names(obs.rov),obs.rov$counts), ] %>% 
   select(sciName, commonName, counts, length_cm, weight_g) %>% 
   mutate(platform = "ROV")
@@ -299,17 +414,17 @@ if (import.data) {
     # Close connection
     close(sub.con)
     
-    # Import density summary
+    # Import density summary to get counts
     counts.sub <- read_excel(here("Data/SUB/sub_data.xlsx"),
                              sheet = "Yok_Sub_Density_step3") %>% 
       rename(site = bank,
              dive_name = dive_tx,
              sciName   = Scientific_Name,
              counts    = SumOfSumOffreq,
-             distance  = SumOfdist,
-             stratum   = depth_bin) %>% 
+             distance  = SumOfdist) %>% 
       mutate(site = str_replace(site,"footprint","The Footprint"),
              site = str_replace(site,"piggy","Piggy Bank"),
+             stratum = cut(depth_bin * -0.9,seq(-400,0,100)),
              sciName   = str_replace(sciName,"unidentified sebastomus","Sebastomus sp."),
              sciName   = str_replace(sciName,"Sebastes spp.","Sebastes sp."),
              sciName   = str_replace(sciName,"Sebastolobus spp.","Sebastolobus sp."),
@@ -323,7 +438,7 @@ if (import.data) {
       distinct() %>% 
       arrange(sciName)
     
-    # Import biomass summary
+    # Import biomass summary 
     lengths.sub <- read_excel(here("Data/SUB/sub_data.xlsx"),
                              sheet = "Yok_Sub_Biomass_step2") %>% 
       left_join(names.sub) %>% 
@@ -374,7 +489,8 @@ if (import.data) {
       left_join(tx.strata.sub)
   }
   # Save SUB data
-  save(counts.sub,biomass.sub,ctd.sub,nav.sub,tx.dist.sub,lengths.sub,file = here("Data/SUB/sub_data.Rdata"))
+  save(counts.sub, biomass.sub, ctd.sub, nav.sub, tx.dist.sub, lengths.sub, 
+       file = here("Data/SUB/sub_data.Rdata"))
 } else {
   # Load SUB data
   load(here("Data/SUB/sub_data.Rdata"))
@@ -409,20 +525,42 @@ nav.sub.summ <- biomass.sub %>%
   mutate(platform = "SUB") %>% 
   arrange(site,desc(stratum))
 
+# Summarise positive transects
+obs.sub.pos <- counts.sub %>%
+  group_by(dive_name, stratum, sciName) %>%
+  summarise(counts = sum(counts)) %>% 
+  filter(str_detect(sciName,filter.spp)) 
+
+# Summarise positive biomass
+biom.sub.pos <- biomass.sub %>% 
+  group_by(dive_name, stratum, sciName) %>%
+  summarise(weight_g = sum(weight_g)) %>% 
+  filter(str_detect(sciName,filter.spp))
+
+# Combine counts and biomass 
+obs.sub.boot <- obs.sub.pos %>% 
+  spread(key = sciName, value = counts, fill = 0) %>% 
+  gather(sciName, counts, -dive_name, -stratum) %>% 
+  left_join(select(biom.sub.pos, dive_name, stratum, sciName, weight_g)) %>% 
+  filter(!(is.na(weight_g) & counts > 0)) %>% 
+  replace_na(list(weight_g = 0)) %>%
+  filter(str_detect(sciName,filter.spp)) %>% 
+  left_join(select(spp, sciName, commonName))
+
 # Summarize SUB observations
-obs.sub.summ <- counts.sub %>% 
+obs.sub.summ <- obs.sub.boot %>% 
   group_by(sciName, commonName) %>% 
   filter(str_detect(sciName,filter.spp)) %>% 
   summarise(nSUB = as.integer(sum(counts))) %>% 
   arrange(desc(nSUB)) %>% 
   mutate(pctSUB = nSUB/sum(.$nSUB)*100)
 
-# ROV data for bootstrap analysis 
+# SUB data for bootstrap analysis 
 boot.data.sub <- biomass.sub %>% 
   group_by(site,dive_name,stratum,sciName) %>% 
   summarise(counts   = sum(counts),
             weight_g = sum(weight_g)) %>% 
-  left_join(distinct(select(biomass.sub,dive_name,distance,area))) %>% 
+  left_join(distinct(select(biomass.sub, dive_name, distance, area))) %>% 
   mutate(
     dens_n      = counts/area,         # Numeric density (n/m)
     dens_g      = weight_g/area) %>%   # Biomass density (g/m)
@@ -475,11 +613,11 @@ lw.hist.all <- ggplot(filter(lw.data.all, sciName %in% comp.spp$sciName), aes(le
   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   facet_wrap(~sciName, scales = "free_y", ncol = 5) +
   theme_bw() +
-  theme(strip.text.x = element_text(face = "bold.italic"),
-        strip.background.x = element_blank(),
-        legend.position = c(1,1),
+  theme(strip.text.x         = element_text(face = "bold.italic"),
+        strip.background     = element_blank(),
+        legend.position      = c(1,1),
         legend.justification = c(1,1),
-        legend.background = element_blank()) +
+        legend.background    = element_blank()) +
   xlab("\nTotal length (cm)") + ylab("Frequency\n")
 
 # Save figure
@@ -489,14 +627,16 @@ ggsave(lw.hist.all, filename = here("Figs/fig_histogram_length_comp.png"),
 # Length histogram for select species
 lw.hist.select <- ggplot(filter(lw.data.all, sciName %in% select.spp), aes(length_cm, fill = platform)) +
   geom_histogram(breaks = seq(0,70,10),colour = "white",alpha = 0.5) +
-  scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
+  scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + 
+  # scale_y_continuous(expand = c(0,0,0,0.05)) +
+  theme_bw() +
   facet_wrap(~sciName, scales = "free_y", ncol = 2) +
   theme_bw() +
-  theme(strip.text.x = element_text(face = "bold.italic"),
-        strip.background.x = element_blank(),
-        legend.position = c(1,1),
+  theme(strip.text.x         = element_text(face = "bold.italic"),
+        strip.background     = element_blank(),
+        legend.position      = c(1,1),
         legend.justification = c(1,1),
-        legend.background = element_blank()) +
+        legend.background    = element_blank()) +
   xlab("\nTotal length (cm)") + ylab("Frequency\n")
 
 # Save figure
@@ -560,7 +700,6 @@ if (save.figs) {
   # Read shapefiles
   sample_frame    <- st_read(here("Data/GIS/sampling_frame.shp"))
   sample_frame_jb <- st_read(here("Data/GIS/sampling_frame_jb.shp"))
-  depth_strata    <- st_read(here("Data/GIS/depth_polygons.shp"))
   depth_contours  <- st_read(here("Data/GIS/depth_contours.shp"))
   nav.auv         <- st_read(here("Data/GIS/auv_nav_lines.shp"))
   grid.auv        <- st_read(here("Data/GIS/auv_grid_clipped.shp"))
@@ -584,10 +723,10 @@ if (save.figs) {
     xlab("\nLongitude") + ylab("Latitude\n") +
     coord_sf(xlim = c(-119.525, -119.435), ylim = c(33.915, 33.97)) +
     theme_bw() +
-    theme(axis.text.x = element_text(size = 11),
-          axis.text.y = element_text(size = 11, angle = 90, hjust = 0.5),
-          axis.title.x = element_text(size = 16),
-          axis.title.y = element_text(size = 16),
+    theme(axis.text.x      = element_text(size = 11),
+          axis.text.y      = element_text(size = 11, angle = 90, hjust = 0.5),
+          axis.title.x     = element_text(size = 16),
+          axis.title.y     = element_text(size = 16),
           panel.grid.major = element_line(colour = "white"))
   
   # Save site map
@@ -662,7 +801,7 @@ boot.summ.sample.rov <- boot.samples.rov %>%
     biom.cv      = sd(boot.biom)/biom.mean * 100,
     biom.ci.low  = quantile(boot.biom, 0.025),
     biom.ci.hi   = quantile(boot.biom, 0.975)) %>% 
-  arrange(sciName, site)
+  arrange(as.character(sciName))
 ```
 
 ```{r SUB_bootstrap}
@@ -753,10 +892,10 @@ raster.biomass.all <- ggplot(boot.summ.sample.all, aes(factor(sciName),platform)
   coord_flip() + xlab("Species") + ylab("Vehicle") +
   facet_wrap(~site, nrow = 1) + 
   theme_bw() +
-  theme(axis.text.y = element_blank(),
-        axis.title.y = element_blank(),
-        strip.background.x = element_blank(),
-        strip.text.x = element_text(face = "bold")) +
+  theme(axis.text.y      = element_blank(),
+        axis.title.y     = element_blank(),
+        strip.background = element_blank(),
+        strip.text.x     = element_text(face = "bold")) +
   ggtitle("Biomass")
 
 ggsave(raster.biomass.all, filename = here("Figs/fig_raster_biomass_all.png"),
@@ -770,10 +909,10 @@ raster.biomass.select <- ggplot(filter(boot.summ.sample.all,sciName %in% select.
   coord_flip() + xlab("Species") + ylab("Vehicle") +
   facet_wrap(~site, nrow = 1) + 
   theme_bw() +
-  theme(axis.text.y = element_blank(),
-        axis.title.y = element_blank(),
-        strip.background.x = element_blank(),
-        strip.text.x = element_text(face = "bold")) +
+  theme(axis.text.y      = element_blank(),
+        axis.title.y     = element_blank(),
+        strip.background = element_blank(),
+        strip.text.x     = element_text(face = "bold")) +
   ggtitle("Biomass")
 
 ggsave(raster.biomass.select, filename = here("Figs/fig_raster_biomass_select.png"),height = 5, width = 5)
@@ -787,7 +926,7 @@ raster.abundance.all <- ggplot(boot.summ.sample.all, aes(factor(sciName),platfor
   facet_wrap(~site, nrow = 1) + 
   theme_bw() +
   theme(axis.text.y = element_text(face = "italic"),
-        strip.background.x = element_blank(),
+        strip.background = element_blank(),
         strip.text.x = element_text(face = "bold"),
         legend.position = "none") +
   ggtitle("Abundance")
@@ -803,7 +942,7 @@ raster.abundance.select <- ggplot(filter(boot.summ.sample.all,sciName %in% selec
   facet_wrap(~site, nrow = 1) + 
   theme_bw() +
   theme(axis.text.y = element_text(face = "italic"),
-        strip.background.x = element_blank(),
+        strip.background = element_blank(),
         strip.text.x = element_text(face = "bold"),
         legend.position = "none") +
   ggtitle("Abundance")
@@ -835,7 +974,7 @@ boot.abund.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% select.spp 
   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   theme(strip.text.x = element_text(face = "bold.italic"),
-        strip.background.x = element_blank(),
+        strip.background = element_blank(),
         axis.text.x = element_blank(),
         axis.text.y = element_blank()) +
   xlab("Abundance") + ylab("Density")
@@ -854,7 +993,7 @@ boot.biom.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% select.spp &
   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   theme(strip.text.x = element_text(face = "bold.italic"),
-        strip.background.x = element_blank(),
+        strip.background = element_blank(),
         axis.text.x = element_blank(),
         axis.text.y = element_blank()) +
   xlab("Biomass") + ylab("Density")
@@ -877,10 +1016,10 @@ boot.abund.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% select.spp 
   facet_wrap(~sciName, scales = "free", nrow = 1) + 
   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
-  theme(strip.text.x = element_text(face = "bold.italic"),
-        strip.background.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_blank()) +
+  theme(strip.text.x     = element_text(face = "bold.italic"),
+        strip.background = element_blank(),
+        axis.text.x      = element_blank(),
+        axis.text.y      = element_blank()) +
   xlab("Abundance") + ylab("Density")
 
 ggsave(boot.abund.dens.plot, filename = here("Figs/fig_density_abundance_piggy.png"), height = 2, width = 15)
@@ -896,10 +1035,10 @@ boot.biom.dens.plot <- ggplot(filter(boot.samples.all, sciName %in% select.spp &
   facet_wrap(~sciName, scales = "free", nrow = 1) + 
   scale_fill_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
   scale_colour_manual(name = "Vehicle", values = c("ROV" = rov.colour, "SUB" = sub.colour)) + theme_bw() +
-  theme(strip.text.x = element_text(face = "bold.italic"),
-        strip.background.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_blank()) +
+  theme(strip.text.x     = element_text(face = "bold.italic"),
+        strip.background = element_blank(),
+        axis.text.x      = element_blank(),
+        axis.text.y      = element_blank()) +
   xlab("Biomass") + ylab("Density")
 
 ggsave(boot.biom.dens.plot, filename = here("Figs/fig_density_biomass_piggy.png"), height = 2, width = 15)
