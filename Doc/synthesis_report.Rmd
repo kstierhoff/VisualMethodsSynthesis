@@ -51,7 +51,7 @@ if (doc.type == "latex") {
 # processing instructions (TRUE/FALSE)
 import.data <- F # Download data from SQL database
 save.figs   <- T # Draw plots and maps, or use existing
-do.boot     <- F # Conduct bootstrap resampling
+do.boot     <- T # Conduct bootstrap resampling
 do.spatial  <- F # Perform spatial analyses (typically done once, or if data change)
 get.sf      <- F # Download costline data
 n.boot      <- 1000 # Number of bootstrap samples
@@ -537,6 +537,11 @@ biom.sub.pos <- biomass.sub %>%
   summarise(weight_g = sum(weight_g)) %>% 
   filter(str_detect(sciName,filter.spp))
 
+# Get site names
+dive.sites.sub <- counts.sub %>% 
+  select(site, stratum, dive_name) %>% 
+  distinct()
+
 # Combine counts and biomass 
 obs.sub.boot <- obs.sub.pos %>% 
   spread(key = sciName, value = counts, fill = 0) %>% 
@@ -545,7 +550,23 @@ obs.sub.boot <- obs.sub.pos %>%
   filter(!(is.na(weight_g) & counts > 0)) %>% 
   replace_na(list(weight_g = 0)) %>%
   filter(str_detect(sciName,filter.spp)) %>% 
-  left_join(select(spp, sciName, commonName))
+  left_join(select(spp, sciName, commonName)) %>% 
+  left_join(dive.sites.sub)
+
+# SUB data for bootstrap analysis 
+boot.data.sub <- obs.sub.boot %>% 
+  left_join(distinct(select(biomass.sub, dive_name, distance, area))) %>%
+  mutate(
+    dens_n      = counts/area,         # Numeric density (n/m)
+    dens_g      = weight_g/area) %>%   # Biomass density (g/m)
+  left_join(strata.area) %>%
+  mutate(abund  = dens_n*stratum_area, # Abundance (n)
+         biom   = dens_g*stratum_area,
+         platform = "SUB") %>% # Biomass (g)
+  select(site, everything(), -commonName)
+
+# Write to CSV
+write_csv(boot.data.sub, here("Output/boot_data_sub.csv"))
 
 # Summarize SUB observations
 obs.sub.summ <- obs.sub.boot %>% 
@@ -554,23 +575,6 @@ obs.sub.summ <- obs.sub.boot %>%
   summarise(nSUB = as.integer(sum(counts))) %>% 
   arrange(desc(nSUB)) %>% 
   mutate(pctSUB = nSUB/sum(.$nSUB)*100)
-
-# SUB data for bootstrap analysis 
-boot.data.sub <- biomass.sub %>% 
-  group_by(site,dive_name,stratum,sciName) %>% 
-  summarise(counts   = sum(counts),
-            weight_g = sum(weight_g)) %>% 
-  left_join(distinct(select(biomass.sub, dive_name, distance, area))) %>% 
-  mutate(
-    dens_n      = counts/area,         # Numeric density (n/m)
-    dens_g      = weight_g/area) %>%   # Biomass density (g/m)
-  left_join(strata.area) %>%
-  mutate(abund  = dens_n*stratum_area, # Abundance (n)
-         biom   = dens_g*stratum_area,
-         platform = "SUB") # Biomass (g)
-
-# Write to CSV
-write_csv(boot.data.sub,here("Output/boot_data_sub.csv"))
 
 # Expand data frame by counts
 lw.data.sub <- lengths.sub[rep(row.names(lengths.sub),lengths.sub$counts), ] %>% 
@@ -646,22 +650,9 @@ ggsave(lw.hist.select, filename = here("Figs/fig_histogram_length_comp_select.pn
 
 ```{r CombineBootstrapData}
 # Combine data from all vehicles for the bootstrap analysis
-
-# Add AUV data
-boot.data.all <- bind_rows(boot.data.rov, boot.data.sub) %>%  
-  filter(str_detect(sciName,filter.spp)) %>% 
+boot.data.all <- bind_rows(boot.data.rov, boot.data.sub) %>% # Add AUV data!!
+  filter(str_detect(sciName, filter.spp)) %>% 
   filter(!sciName %in% exclude.spp)
-
-# # Summarize observations from each vehicle for tabular output
-# obs.summ.all <- boot.data.all %>% 
-#   group_by(sciName, platform) %>% 
-#   summarize(counts = sum(counts)) %>% 
-#   spread(platform,counts) %>% 
-#   mutate(ALL = sum(ROV,SUB,na.rm = T)) %>% 
-#   arrange(desc(ALL))
-
-# # Write to CSV
-# write.csv(obs.summ.all,file = here("Output/obs_summ.csv"), row.names = F, quote = F, na = "-")
 ```
 
 ```{r CreateSiteMap}
@@ -751,8 +742,8 @@ if (do.boot) {
           boot.abund <- NA_real_
           boot.biom  <- NA_real_
           for (ii in seq(1:n.boot)) {
-            boot.abund[ii] <- mean(sample(boot.data$abund,nrow(boot.data),replace = T))
-            boot.biom[ii]  <- mean(sample(boot.data$biom,nrow(boot.data),replace = T))/1000 # Biomass (kg)
+            boot.abund[ii] <- mean(sample(boot.data$abund, nrow(boot.data),replace = T))
+            boot.biom[ii]  <- mean(sample(boot.data$biom, nrow(boot.data),replace = T))/1000 # Biomass (kg)
           }
           boot.df.rov <- rbind(boot.df.rov,
                                data.frame(platform = "ROV", sciName = i, site = j, 
@@ -767,6 +758,25 @@ if (do.boot) {
 } else {
   load(here("Output/boot_results_rov.Rdata"))
 }
+
+# basic.df.rov <- boot.data.rov %>% 
+#   group_by(sciName, site, stratum) %>% 
+#   summarize(
+#     abund.mean = mean(abund),
+#     abund.sd   = sd(abund),
+#     biom.mean  = mean(biom),
+#     biom.sd    = sd(biom))
+# 
+# 
+# basic.df.sub <- boot.data.sub %>% 
+#   group_by(sciName, site, stratum) %>% 
+#   summarize(
+#     abund.mean = mean(abund),
+#     abund.sd   = sd(abund),
+#     biom.mean  = mean(biom),
+#     biom.sd    = sd(biom))
+
+
 # Summarise ROV results by stratum
 boot.summ.stratum.rov <- boot.df.rov %>% 
   group_by(platform,sciName,site,stratum) %>% 
